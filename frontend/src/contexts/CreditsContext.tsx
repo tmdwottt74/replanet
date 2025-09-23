@@ -28,6 +28,7 @@ const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
 export const getAuthHeaders = () => {
   const token = localStorage.getItem('access_token');
+  console.log("getAuthHeaders token:", token);
   return {
     'Content-Type': 'application/json',
     ...(token && { 'Authorization': `Bearer ${token}` })

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from .database import init_db, SessionLocal
-from .routes import dashboard, credits, challenges, auth, achievements, users, admin, mobility, ai_challenge_router # mobility 라우터 추가, AI 챌린지 라우터 추가
+from .routes import dashboard, credits, challenges, auth, achievements, users, admin, mobility, ai_challenge_router, social, garden, reports, ranking, stats, groups, environment
 from .seed_admin_user import seed_admin_user
 from .bedrock_logic import router as chat_router
 
@@ -44,6 +44,12 @@ app.include_router(chat_router)
 print("DEBUG: Including mobility.router") # Debug print
 app.include_router(mobility.router) # mobility 라우터 추가
 app.include_router(ai_challenge_router.router) # AI 챌린지 라우터 추가
+app.include_router(social.router)
+app.include_router(reports.router)
+app.include_router(ranking.router)
+app.include_router(stats.router)
+app.include_router(groups.router)
+app.include_router(environment.router)
 
 @app.on_event("startup")
 async def startup_event():

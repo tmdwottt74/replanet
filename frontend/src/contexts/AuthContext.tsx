@@ -41,7 +41,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // 컴포넌트 마운트 시 로컬 스토리지에서 사용자 정보 확인
   useEffect(() => {
     const savedUser = localStorage.getItem('eco-user');
-    if (savedUser) {
+    const token = localStorage.getItem('access_token');
+    if (savedUser && token) {
       try {
         const userData = JSON.parse(savedUser);
         setUser(userData);
@@ -49,6 +50,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } catch (error) {
         console.error('Failed to parse saved user data:', error);
         localStorage.removeItem('eco-user');
+        localStorage.removeItem('access_token');
       }
     }
     setIsLoading(false); // 초기 로딩 완료
@@ -73,6 +75,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       const userData = await response.json();
+      console.log("Login response:", userData);
       const { access_token, token_type, user_id, username, role } = userData;
 
       localStorage.setItem('access_token', access_token);
@@ -135,7 +138,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.clear(); // 모든 로컬 스토리지 데이터 제거
+    localStorage.removeItem('eco-user');
+    localStorage.removeItem('access_token');
     
     setUser(null);
     setIsAuthenticated(false);

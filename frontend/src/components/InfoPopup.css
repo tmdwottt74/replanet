@@ -1,0 +1,153 @@
+/* ==============================
+   Info Popup 스타일
+   ============================== */
+.info-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(5px);
+}
+
+.info-popup {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: popupSlideIn 0.3s ease-out;
+}
+
+@keyframes popupSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.info-popup .popup-header {
+  background: linear-gradient(135deg, #1abc9c, #16a085);
+  color: white;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-popup .popup-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.info-popup .popup-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 2rem;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.info-popup .popup-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.info-popup .popup-content {
+  padding: 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.info-popup h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0 0 1rem 0;
+}
+
+.info-popup h4 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1abc9c;
+    margin: 1.5rem 0 0.5rem 0;
+}
+
+.info-popup p {
+    font-size: 1rem;
+    color: #6b7280;
+    line-height: 1.6;
+    margin: 0 0 1rem 0;
+}
+
+.info-popup ul {
+    list-style-position: inside;
+    padding-left: 0;
+}
+
+.info-popup li {
+    margin-bottom: 0.5rem;
+}
+
+.info-popup .info-popup-footer {
+  background: #f8f9fa;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #e9ecef;
+}
+
+.info-popup .dont-show-again {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+.info-popup .dont-show-again input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #1abc9c;
+}
+
+.info-popup .checkbox-text {
+  user-select: none;
+}
+
+.info-popup .close-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.info-popup .close-btn:hover {
+  background: #5a6268;
+}

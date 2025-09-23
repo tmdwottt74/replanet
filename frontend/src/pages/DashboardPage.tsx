@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useCredits } from "../contexts/CreditsContext";
 import { Link } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
+import FootprintCalculator from "../components/FootprintCalculator";
 import "../App.css";
 import "./DashboardPage.css";
 
@@ -37,6 +38,8 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportUrl, setReportUrl] = useState<string | null>(null);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
@@ -96,6 +99,25 @@ const DashboardPage: React.FC = () => {
 
     fetchData();
   }, [API_URL]);
+
+  const generateReport = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/reports/`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        setReportUrl(result.url);
+        setShowReportModal(true);
+      } else {
+        throw new Error("Failed to generate report");
+      }
+    } catch (e) {
+      console.error("Failed to generate report:", e);
+      setError("리포트 생성에 실패했습니다.");
+    }
+  };
 
   // 크레딧 데이터가 변경될 때마다 대시보드 데이터 업데이트
   useEffect(() => {
@@ -158,6 +180,16 @@ const DashboardPage: React.FC = () => {
         subtitle="나의 친환경 활동 현황을 한눈에 확인하세요"
         icon="📊"
       />
+      <button onClick={generateReport}>리포트 생성</button>
+      {showReportModal && reportUrl && (
+        <div className="modal-overlay" onClick={() => setShowReportModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>주간 리포트</h3>
+            <img src={reportUrl} alt="Weekly Report" style={{ width: "100%" }} />
+            <button onClick={() => setShowReportModal(false)}>닫기</button>
+          </div>
+        </div>
+      )}
       
       {/* 요약 카드 */}
       <div
@@ -754,6 +786,8 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <FootprintCalculator />
     </div>
   );
 };

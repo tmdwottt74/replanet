@@ -1,0 +1,24 @@
+.social-page {
+  padding: 2rem;
+}
+
+.social-feed, .leaderboard {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+}
+
+.social-feed h3, .leaderboard h3 {
+  margin-top: 0;
+}
+
+.social-feed ul, .leaderboard ol {
+  list-style: none;
+  padding: 0;
+}
+
+.social-feed li, .leaderboard li {
+  padding: 1rem;
+  border-bottom: 1px solid #eee;
+}

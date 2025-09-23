@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
@@ -49,18 +49,23 @@ def init_db():
     from .seed_admin_user import seed_admin_user
     from .seed_challenges import seed_challenges
     from .seed_garden_levels import seed_garden_levels
-    from .crud import create_user_group # Assuming this is needed for initial groups
 
     Base.metadata.create_all(bind=engine)
 
     # Seed initial data
     db = SessionLocal()
     try:
-        # Seed default user groups if needed
-        # Example: create_user_group(db, schemas.UserGroupCreate(group_name="Default Group", group_type="ETC"))
         seed_admin_user(db)
         seed_challenges(db)
         seed_garden_levels(db)
+
+        # Execute SQL script for creating views
+        sql_file_path = os.path.join(os.path.dirname(__file__), "sql", "create_views.sql")
+        if os.path.exists(sql_file_path):
+            with open(sql_file_path, "r") as f:
+                db.execute(text(f.read()))
+            db.commit()
+
     except Exception as e:
         print(f"Error during database seeding: {e}")
     finally:

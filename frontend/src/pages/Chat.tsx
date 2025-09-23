@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useCredits } from '../contexts/CreditsContext'; // Add this line
 import { useAuth } from '../contexts/AuthContext'; // Add this line
 import { getAuthHeaders } from '../contexts/CreditsContext'; // Add this line
+import AdvancedChatFeatures from '../components/AdvancedChatFeatures';
 import "./Chat.css";
 /// <reference lib="dom" />
 
@@ -29,7 +30,9 @@ const Chat: React.FC = () => {
   const [inputValue, setInputValue] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false); // 음성 인식 상태
+  const [isTtsEnabled, setIsTtsEnabled] = useState<boolean>(false); // TTS 상태
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+
   const recognitionRef = useRef<SpeechRecognition | null>(null); // SpeechRecognition 인스턴스 참조
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null); // Timer for silence detection
 
@@ -118,6 +121,13 @@ const Chat: React.FC = () => {
     }
   };
 
+  const speak = (text: string) => {
+    if (!isTtsEnabled || !window.speechSynthesis) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ko-KR';
+    window.speechSynthesis.speak(utterance);
+  };
+
   // 상태 메시지 (음성 인식용)
   const [statusMessage, setStatusMessage] = useState<string>("");
 
@@ -174,6 +184,7 @@ const Chat: React.FC = () => {
 
       const botMessage: Message = { sender: "bot", text: botText };
       setMessages((prev) => [...prev, botMessage]);
+      speak(botText);
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
       setMessages((prev) => [...prev, { sender: "bot", text: "데이터를 불러오는 데 실패했어요. 다시 시도해주세요." }]);
@@ -208,6 +219,7 @@ const Chat: React.FC = () => {
 
       const data = await response.json();
       setMessages((prev) => [...prev, { sender: "bot", text: data.response }]);
+      speak(data.response);
     } catch (error) {
       console.error("Failed to send chat message:", error);
       setMessages((prev) => [...prev, { sender: "bot", text: "메시지 전송에 실패했어요. 다시 시도해주세요." }]);
@@ -247,10 +259,8 @@ const Chat: React.FC = () => {
     "내가 모은 포인트는?",
     "내 정원 레벨은?",
     "챌린지 진행 상황 알려줘",
-    "AI 챌린지 추천해줘", // AI 챌린지 추천 질문 추가
     "탄소 절감 방법 알려줘",
     "포인트 적립 방법은?",
-    "정원 관리 팁 주세요",
     "환경 친화적인 생활 방법은?",
   ];
 
@@ -266,6 +276,13 @@ const Chat: React.FC = () => {
 
     // Use sendChatMessage for all interactions with the backend chatbot
     await sendChatMessage(messageToSend);
+  };
+
+  const handleFeatureClick = async (prompt: string) => {
+    const userMessage: Message = { sender: "user", text: prompt };
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
+    await sendChatMessage(prompt);
   };
 
   // 미리보기 모드
@@ -333,6 +350,9 @@ const Chat: React.FC = () => {
           <div className="status-dot"></div>
           <span>온라인</span>
         </div>
+        <button onClick={() => setIsTtsEnabled(!isTtsEnabled)} className={`tts-button ${isTtsEnabled ? 'active' : ''}`}>
+          {isTtsEnabled ? '🔊' : '🔇'}
+        </button>
       </div>
 
       <div className="welcome-section">
@@ -399,6 +419,9 @@ const Chat: React.FC = () => {
           </div>
         </div>
       )}
+
+            {!isPreview && <AdvancedChatFeatures onFeatureClick={handleFeatureClick} />}
+
 
       <div className="input-area">
   <div className="input-container wide">

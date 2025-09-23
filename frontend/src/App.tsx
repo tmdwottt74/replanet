@@ -29,6 +29,17 @@ import CreditRecent from './pages/CreditRecent'; // New
 import Register from './pages/Register'; // New
 import ServicePage from './ServicePage'; // New
 import MobilityTrackingPage from './pages/MobilityTrackingPage'; // New Mobility Tracking Page
+import GardenPage from './pages/GardenPage';
+import ShopPage from './pages/ShopPage';
+import SocialPage from './pages/SocialPage';
+import RankingPage from './pages/RankingPage';
+import GroupsPage from './pages/GroupsPage';
+import StatisticsPage from './pages/StatisticsPage';
+import InfoPopup from './components/InfoPopup';
+import LoadingSpinner from './components/LoadingSpinner';
+
+
+
 
 
 // 로고 컴포넌트
@@ -45,10 +56,23 @@ function AppContent() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showHowToPopup, setShowHowToPopup] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+
+
   const { user, isAuthenticated, logout } = useAuth();
+
   const location = useLocation();
   const navigate = useNavigate();
   const isPreview = new URLSearchParams(location.search).get("preview") === "1";
+
+  useEffect(() => {
+    setIsPageLoading(true);
+    const timer = setTimeout(() => {
+      setIsPageLoading(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
 
   // 페이지 이동 시 스크롤을 맨 위로 이동
   useEffect(() => {
@@ -69,7 +93,7 @@ function AppContent() {
 
   // 홈 화면 접속 시 How to Use 팝업 표시
   useEffect(() => {
-    if (location.pathname === "/" && !isPreview) {
+    if (!isPreview) {
       const today = new Date().toDateString();
       const dontShowToday = localStorage.getItem('howto-dont-show-today');
       
@@ -82,7 +106,9 @@ function AppContent() {
         return () => clearTimeout(timer);
       }
     }
-  }, [location.pathname, isPreview]);
+  }, [isPreview]);
+
+
 
   // 서비스 검색 데이터 ✅ (App 함수 안에만 유지)
   const serviceItems = [
@@ -151,6 +177,7 @@ function AppContent() {
 
   return (
     <div className="App">
+      {isPageLoading && <LoadingSpinner />}
       {!isPreview && !isAuthPage && <Sidebar />}
       
       {!isPreview && !isAuthPage && (
@@ -179,6 +206,7 @@ function AppContent() {
       )}
 
       <main className={!isPreview && !isAuthPage ? "with-sidebar" : ""}>
+
         <Routes>
           <Route
             path="/"
@@ -355,6 +383,12 @@ function AppContent() {
           <Route path="/register" element={<Register />} />
           <Route path="/service" element={<ServicePage />} />
           <Route path="/mobility-tracking" element={<MobilityTrackingPage />} /> {/* New Mobility Tracking Route */}
+          <Route path="/garden" element={<GardenPage />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route path="/social" element={<SocialPage />} />
+          <Route path="/ranking" element={<RankingPage />} />
+          <Route path="/groups" element={<GroupsPage />} />
+          <Route path="/statistics" element={<StatisticsPage />} />
         </Routes>
       </main>
 

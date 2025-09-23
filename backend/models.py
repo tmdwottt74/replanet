@@ -291,3 +291,13 @@ class GardenWateringLog(Base):
     
     # Relationships
     user = relationship("User", backref="watering_logs")
+
+class SocialPost(Base):
+    __tablename__ = "social_posts"
+
+    post_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.user_id"), nullable=False)
+    content = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", backref="social_posts")

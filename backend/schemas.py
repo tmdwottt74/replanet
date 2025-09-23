@@ -218,7 +218,7 @@ class User(BaseModel):
 
 class UserRead(User):
     class Config:
-        orm_mode = True
+        from_attributes = True
         exclude = {"password_hash"}
 
 class UserCreate(BaseModel):

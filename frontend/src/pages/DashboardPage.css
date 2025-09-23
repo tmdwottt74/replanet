@@ -220,3 +220,42 @@
     font-size: 1.1rem; /* 작은 화면에서도 16px 이상 유지 */
   }
 }
+
+.footprint-calculator {
+  margin-top: 2rem;
+  background: #ffffff;
+  padding: 2rem;
+  border-radius: 20px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+}
+
+.footprint-calculator h4 {
+  margin-top: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+}
+
+.log-list table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.log-list th, .log-list td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.log-list th {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.log-list td {
+  font-size: 1rem;
+  color: #4b5563;
+}
