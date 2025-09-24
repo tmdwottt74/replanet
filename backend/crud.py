@@ -147,7 +147,8 @@ def create_challenge(db: Session, challenge: schemas.ChallengeCreate):
         description=challenge.description,
         scope=challenge.scope,
         target_mode=challenge.target_mode,
-        target_saved_g=challenge.target_saved_g,
+        goal_type=challenge.goal_type,
+        goal_target_value=challenge.goal_target_value,
         start_at=challenge.start_at,
         end_at=challenge.end_at,
         reward=challenge.reward,
@@ -219,15 +220,64 @@ def get_user_challenges(db: Session, user_id: int, skip: int = 0, limit: int = 1
 # Challenge Progress Calculation
 # =========================
 def calculate_challenge_progress(db: Session, user_id: int, challenge: models.Challenge) -> float:
-    total_saved_g = db.query(func.sum(models.MobilityLog.co2_saved_g)).filter(
+    total_achieved_value = 0.0
+    
+    # Filter for mobility logs within the challenge period and for the target mode
+    query_filters = [
         models.MobilityLog.user_id == user_id,
         models.MobilityLog.started_at >= challenge.start_at,
         models.MobilityLog.ended_at <= challenge.end_at,
-        (models.MobilityLog.mode == challenge.target_mode) if challenge.target_mode != schemas.TransportMode.ANY else True
-    ).scalar()
+    ]
+    if challenge.target_mode != schemas.TransportMode.ANY:
+        query_filters.append(models.MobilityLog.mode == challenge.target_mode)
 
-    if total_saved_g is None:
-        total_saved_g = 0
+    if challenge.goal_type == schemas.ChallengeGoalType.CO2_SAVED:
+        total_achieved_value = db.query(func.sum(models.MobilityLog.co2_saved_g)).filter(*query_filters).scalar()
+    elif challenge.goal_type == schemas.ChallengeGoalType.DISTANCE_KM:
+        total_achieved_value = db.query(func.sum(models.MobilityLog.distance_km)).filter(*query_filters).scalar()
+    elif challenge.goal_type == schemas.ChallengeGoalType.TRIP_COUNT:
+        total_achieved_value = db.query(func.count(models.MobilityLog.log_id)).filter(*query_filters).scalar()
+    
+    if total_achieved_value is None:
+        total_achieved_value = 0.0
 
-    progress = (total_saved_g / challenge.target_saved_g) * 100 if challenge.target_saved_g > 0 else 0
-    return min(progress, 100.0) # Cap progress at 100%
+    progress = (float(total_achieved_value) / float(challenge.goal_target_value)) * 100 if challenge.goal_target_value > 0 else 0.0
+    return progress
+
+def update_challenge_status_if_completed(db: Session, challenge: models.Challenge, progress: float):
+    if progress >= 100.0 and challenge.status == models.ChallengeStatus.ACTIVE:
+        challenge.status = models.ChallengeStatus.COMPLETED
+        db.add(challenge)
+        db.commit()
+        db.refresh(challenge)
+    return challenge
+
+def update_personal_challenge_progress(db: Session, user_id: int):
+    """
+    Updates the progress for all active personal challenges for a user.
+    """
+    # Get all personal challenges the user has joined
+    user_challenges = db.query(models.Challenge).join(models.ChallengeMember).filter(
+        models.ChallengeMember.user_id == user_id,
+        models.Challenge.scope == 'PERSONAL',
+        models.Challenge.status == models.ChallengeStatus.ACTIVE
+    ).all()
+
+    for challenge in user_challenges:
+        # Recalculate progress
+        progress = calculate_challenge_progress(db, user_id, challenge)
+        
+        # Get the specific ChallengeMember entry to update
+        member_entry = db.query(models.ChallengeMember).filter(
+            models.ChallengeMember.user_id == user_id,
+            models.ChallengeMember.challenge_id == challenge.challenge_id
+        ).first()
+        
+        if member_entry:
+            member_entry.progress = progress
+            db.add(member_entry)
+            
+            # Also check if the challenge is now completed
+            update_challenge_status_if_completed(db, challenge, progress)
+            
+    db.commit()

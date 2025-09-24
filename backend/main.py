@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from .database import init_db, SessionLocal
-from .routes import dashboard, credits, challenges, auth, achievements, users, admin, mobility, ai_challenge_router # mobility 라우터 추가, AI 챌린지 라우터 추가
+from .routes import dashboard, credits, challenges, auth, achievements, users, admin, mobility, ai_challenge_router, groups, group_challenges # mobility 라우터 추가, AI 챌린지 라우터 추가
 from .seed_admin_user import seed_admin_user
 from .bedrock_logic import router as chat_router
 
@@ -20,9 +20,12 @@ app = FastAPI(
 )
 
 # CORS 설정
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,6 +47,8 @@ app.include_router(chat_router)
 print("DEBUG: Including mobility.router") # Debug print
 app.include_router(mobility.router) # mobility 라우터 추가
 app.include_router(ai_challenge_router.router) # AI 챌린지 라우터 추가
+app.include_router(groups.router)
+app.include_router(group_challenges.router)
 
 @app.on_event("startup")
 async def startup_event():

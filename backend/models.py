@@ -2,10 +2,11 @@ from datetime import datetime
 import enum
 
 from sqlalchemy import (
-    Column, BigInteger, Enum, DateTime, Numeric, String, Integer, ForeignKey
+    Column, BigInteger, Enum, DateTime, Numeric, String, Integer, ForeignKey, Boolean, Text
 )
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 from .database import Base  # Declarative Base
 
@@ -53,9 +54,28 @@ class GardenStatus(str, enum.Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
 
+# New Enums for Group Feature
+class GroupRole(str, enum.Enum):
+    LEADER = "leader"
+    MEMBER = "member"
+
+class ChallengeStatus(str, enum.Enum):
+    UPCOMING = "upcoming"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+class ChallengeGoalType(str, enum.Enum):
+    CO2_SAVED = "CO2_SAVED"
+    DISTANCE_KM = "DISTANCE_KM"
+    TRIP_COUNT = "TRIP_COUNT"
+
+class GoalType(str, enum.Enum):
+    CO2_REDUCTION = "co2_reduction"
+    ACTIVITY_COUNT = "activity_count"
 
 # ---------------------------
-# USER GROUPS
+# USER GROUPS (Existing)
 # ---------------------------
 class UserGroup(Base):
     __tablename__ = "user_groups"
@@ -86,6 +106,75 @@ class User(Base):
     mobility_logs = relationship("MobilityLog", backref="user")
     credits = relationship("CreditsLedger", backref="user")
     garden = relationship("UserGarden", backref="user", uselist=False)
+
+
+# ---------------------------
+# SOCIAL GROUPS (New)
+# ---------------------------
+class Group(Base):
+    __tablename__ = "groups"
+
+    group_id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False, index=True)
+    description = Column(Text)
+    invite_code = Column(String(20), unique=True, nullable=False, index=True)
+    created_by = Column(BigInteger, ForeignKey("users.user_id"))
+    created_at = Column(DateTime, server_default=func.now())
+    is_active = Column(Boolean, default=True)
+    max_members = Column(Integer, default=50)
+
+    creator = relationship("User", backref="created_groups")
+    members = relationship("GroupMember", back_populates="group", cascade="all, delete-orphan")
+    challenges = relationship("GroupChallenge", back_populates="group", cascade="all, delete-orphan")
+
+    @property
+    def member_count(self) -> int:
+        return sum(1 for member in self.members if member.is_active)
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+
+    member_id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.group_id"), nullable=False)
+    user_id = Column(BigInteger, ForeignKey("users.user_id"), nullable=False)
+    role = Column(Enum(GroupRole), default=GroupRole.MEMBER)
+    joined_at = Column(DateTime, server_default=func.now())
+    is_active = Column(Boolean, default=True)
+
+    group = relationship("Group", back_populates="members")
+    user = relationship("User", backref="group_memberships")
+
+class GroupChallenge(Base):
+    __tablename__ = "group_challenges"
+
+    challenge_id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.group_id"), nullable=False)
+    title = Column(String(100), nullable=False)
+    description = Column(Text)
+    goal_type = Column(Enum(GoalType), default=GoalType.CO2_REDUCTION)
+    goal_value = Column(Numeric(10, 2), nullable=False)
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+    status = Column(Enum(ChallengeStatus), default=ChallengeStatus.UPCOMING)
+    created_by = Column(BigInteger, ForeignKey("users.user_id"))
+    created_at = Column(DateTime, server_default=func.now())
+
+    group = relationship("Group", back_populates="challenges")
+    creator = relationship("User")
+    participants = relationship("GroupChallengeMember", back_populates="challenge", cascade="all, delete-orphan")
+
+class GroupChallengeMember(Base):
+    __tablename__ = "group_challenge_members"
+
+    participant_id = Column(Integer, primary_key=True, index=True)
+    challenge_id = Column(Integer, ForeignKey("group_challenges.challenge_id"), nullable=False)
+    user_id = Column(BigInteger, ForeignKey("users.user_id"), nullable=False)
+    progress = Column(Numeric(10, 2), default=0.0)
+    contribution = Column(Numeric(10, 2), default=0.0)
+    joined_at = Column(DateTime, server_default=func.now())
+
+    challenge = relationship("GroupChallenge", back_populates="participants")
+    user = relationship("User")
 
 
 # ---------------------------
@@ -168,15 +257,17 @@ class Challenge(Base):
     description = Column(String(255))
     scope = Column(Enum(ChallengeScope), default=ChallengeScope.PERSONAL)
     target_mode = Column(Enum(TransportMode), default=TransportMode.ANY)
-    target_saved_g = Column(Integer, nullable=False)
+    goal_type = Column(Enum(ChallengeGoalType), nullable=False)
+    goal_target_value = Column(Numeric(10, 2), nullable=False)
     start_at = Column(DateTime, nullable=False)
     end_at = Column(DateTime, nullable=False)
     reward = Column(String(255), nullable=True) # Add reward field
+    status = Column(Enum(ChallengeStatus), default=ChallengeStatus.ACTIVE) # ChallengeStatus 필드 추가
     created_by = Column(BigInteger, ForeignKey("users.user_id"))
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    creator = relationship("User", backref="created_challenges")
+    creator = relationship("User", backref="created_challenges", foreign_keys=[created_by])
     members = relationship("User", secondary="challenge_members", backref="challenges")
 
 # Challenge Members (Many-to-Many)

@@ -11,8 +11,10 @@ from ..dependencies import get_current_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
-# 📌 챌린지 목표 (예시: 100kg 절감)
-CHALLENGE_GOAL_KG = 100
+import os
+
+# 📌 챌린지 목표 (환경 변수에서 로드, 기본값 100kg)
+CHALLENGE_GOAL_KG = float(os.getenv("DEFAULT_CHALLENGE_GOAL_KG", 100))
 
 @router.get("/", response_model=DashboardStats)
 async def get_dashboard(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> DashboardStats:

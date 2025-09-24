@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from .. import database, schemas, models
+from backend.services.mobility_service import MobilityService # NEW IMPORT
 
 router = APIRouter(
-    prefix="/api/admin",
+    prefix="/admin",
     tags=["Admin"]
 )
 
@@ -57,44 +58,10 @@ def add_mobility_log(
     log_create: schemas.MobilityLogCreate,
     db: Session = Depends(database.get_db)
 ):
-    # 기존 mobility_logs.py의 로직을 재활용하거나 직접 구현
-    # 여기서는 직접 구현
     user = db.query(models.User).filter(models.User.user_id == log_create.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    db_mobility_log = MobilityService.log_mobility(db, log_create, user)
 
-    # CO2 절감량 및 포인트 계산 (임시 로직, 실제는 더 복잡할 수 있음)
-    # 예시: 1km 당 100g CO2 절감, 100g 당 10포인트
-    co2_saved_g = log_create.distance_km * 100 # 1km 당 100g 절감 가정
-    points_earned = int(co2_saved_g / 10) # 10g 당 1포인트 가정
-
-    new_log = models.MobilityLog(
-        user_id=log_create.user_id,
-        mode=log_create.mode,
-        distance_km=log_create.distance_km,
-        started_at=log_create.started_at,
-        ended_at=log_create.ended_at,
-        co2_saved_g=co2_saved_g,
-        points_earned=points_earned,
-        description=log_create.description,
-        start_point=log_create.start_point,
-        end_point=log_create.end_point
-    )
-    db.add(new_log)
-
-    # 크레딧 장부에 포인트 추가
-    credit_entry = models.CreditsLedger(
-        user_id=log_create.user_id,
-        ref_log_id=new_log.log_id, # MobilityLog의 ID를 참조
-        type="EARN",
-        points=points_earned,
-        reason=f"Mobility: {log_create.mode.value}",
-        meta_json={"mobility_log_id": new_log.log_id}
-    )
-    db.add(credit_entry)
-
-    db.commit()
-    db.refresh(new_log)
-    db.refresh(credit_entry)
-
-    return {"message": f"Mobility log added and {points_earned} points earned for user {log_create.user_id}"}
+    return {"message": f"Mobility log added and {db_mobility_log.points_earned} points earned for user {log_create.user_id}"}

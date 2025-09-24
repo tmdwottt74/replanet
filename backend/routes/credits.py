@@ -42,11 +42,19 @@ async def get_credit_balance(current_user: User = Depends(get_current_user), db:
         func.sum(CreditsLedger.points)
     ).scalar() or 0
     
+    # 총 탄소 절감량 계산
+    total_carbon_reduced_g = db.query(MobilityLog).filter(
+        MobilityLog.user_id == user_id
+    ).with_entities(
+        func.sum(MobilityLog.co2_saved_g)
+    ).scalar() or 0.0
+    
     return CreditBalance(
         user_id=user_id,
         total_points=total_points,
         recent_earned=recent_earned,
-        last_updated=datetime.utcnow()
+        last_updated=datetime.utcnow(),
+        total_carbon_reduced_g=float(total_carbon_reduced_g) # 추가된 필드
     )
 
 # 크레딧 거래 내역 조회

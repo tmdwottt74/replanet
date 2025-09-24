@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List
 
-from .. import database, models, schemas
+from .. import database, models, schemas, crud
 from ..dependencies import get_current_user
 
 # /api/challenges 경로로 설정
@@ -34,6 +34,10 @@ def join_challenge(
     challenge = db.query(models.Challenge).filter(models.Challenge.challenge_id == challenge_id).first()
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")
+
+    # 챌린지 상태 확인: 완료되었거나 취소된 챌린지에는 참여할 수 없음
+    if challenge.status in [models.ChallengeStatus.COMPLETED, models.ChallengeStatus.CANCELLED]:
+        raise HTTPException(status_code=400, detail=f"Cannot join a {challenge.status.value} challenge.")
 
     # 2. 사용자 존재 여부 확인 (current_user로 이미 확인됨)
     user = db.query(models.User).filter(models.User.user_id == user_id).first()
@@ -77,22 +81,56 @@ def get_challenges(current_user: models.User = Depends(get_current_user), db: Se
 
     result = []
     for c in all_challenges:
-        # TODO: 실제 진행률 계산 로직 필요
-        progress = 0 
-        if c.challenge_id in joined_challenge_ids:
-            # 참여한 챌린지의 경우 임시로 25% 진행률 부여
-            progress = 25 
+        is_joined = c.challenge_id in joined_challenge_ids
+        progress = 0.0
+        if is_joined:
+            # 참여한 챌린지의 경우 실제 진행률 계산
+            progress = crud.calculate_challenge_progress(db, user_id, c)
+            # 진행률에 따라 챌린지 상태 업데이트
+            c = crud.update_challenge_status_if_completed(db, c, progress)
 
         result.append({
             "id": c.challenge_id,
             "title": c.title,
             "description": c.description,
-            "progress": progress,
+            "progress": int(progress), # 프론트엔드 스키마에 맞게 int로 변환
             "reward": c.reward,
-            "is_joined": c.challenge_id in joined_challenge_ids
+            "is_joined": is_joined,
+            "status": c.status # status 필드 추가
         })
 
     return result
+
+
+@router.get("/{challenge_id}/progress")
+def get_challenge_progress(
+    challenge_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    """
+    특정 챌린지에 대한 현재 사용자의 진행률을 계산하여 반환합니다.
+    """
+    user_id = current_user.user_id
+    
+    # 챌린지 존재 여부 확인
+    challenge = db.query(models.Challenge).filter(models.Challenge.challenge_id == challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+
+    # 사용자가 챌린지에 참여했는지 확인
+    member = db.query(models.ChallengeMember).filter(
+        models.ChallengeMember.challenge_id == challenge_id,
+        models.ChallengeMember.user_id == user_id
+    ).first()
+
+    if not member:
+        raise HTTPException(status_code=403, detail="User is not a member of this challenge")
+
+    # 진행률 계산
+    progress = crud.calculate_challenge_progress(db, user_id, challenge)
+    
+    return {"progress": progress}
 
 
 @router.get("/achievements", response_model=List[dict])

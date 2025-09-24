@@ -8,50 +8,64 @@ from . import crud, schemas, models
 models.Base.metadata.create_all(bind=engine)
 
 def seed_challenges(db: Session):
+    # Delete all existing challenges to ensure a clean slate
+    db.query(models.Challenge).delete()
+    db.query(models.ChallengeMember).delete() # Also delete challenge members
+    db.commit()
+    print("Deleted all existing challenges and challenge members.")
+
+    now = datetime.utcnow()
+    # Admin user ID (assuming admin user is created with ID 1)
+    admin_user_id = 1 
+
     challenges_to_create = [
         schemas.ChallengeCreate(
-            title="9월 대중교통 챌린지",
-            description="이번 달 대중교통으로 10kg CO₂ 절감하기",
+            title="대중교통 이용 챌린지",
+            description="이번 주 대중교통으로 5kg CO₂ 절감하기",
             scope=schemas.ChallengeScope.PERSONAL,
             target_mode=schemas.TransportMode.ANY,
-            target_saved_g=10000, # 10kg
-            start_at=datetime(2025, 9, 1),
-            end_at=datetime(2025, 9, 30),
+            goal_type=schemas.ChallengeGoalType.CO2_SAVED,
+            goal_target_value=5000.0, # 5kg
+            start_at=now,
+            end_at=now + timedelta(days=7),
             reward="에코 크레딧 200P + 뱃지",
-            created_by=1 # Assuming user_id 1 exists
+            created_by=admin_user_id
         ),
         schemas.ChallengeCreate(
             title="자전거 출퇴근 챌린지",
-            description="한 달간 자전거로 출퇴근하여 5kg CO₂ 절감",
+            description="한 달간 자전거로 50km 이동하기",
             scope=schemas.ChallengeScope.PERSONAL,
             target_mode=schemas.TransportMode.BIKE,
-            target_saved_g=5000, # 5kg
-            start_at=datetime(2025, 9, 1),
-            end_at=datetime(2025, 9, 30),
+            goal_type=schemas.ChallengeGoalType.DISTANCE_KM,
+            goal_target_value=50.0, # 50km
+            start_at=now,
+            end_at=now + timedelta(days=30),
             reward="에코 크레딧 150P + 뱃지",
-            created_by=1
+            created_by=admin_user_id
         ),
         schemas.ChallengeCreate(
             title="도보 생활 챌린지",
-            description="일주일간 1km 이내는 도보로 이동하기",
+            description="일주일간 10km 도보 이동하기",
             scope=schemas.ChallengeScope.PERSONAL,
             target_mode=schemas.TransportMode.WALK,
-            target_saved_g=1000, # 1kg (assuming 1km walk saves some CO2)
-            start_at=datetime.utcnow() - timedelta(days=7),
-            end_at=datetime.utcnow() + timedelta(days=7),
+            goal_type=schemas.ChallengeGoalType.DISTANCE_KM,
+            goal_target_value=10.0, # 10km
+            start_at=now,
+            end_at=now + timedelta(days=7),
             reward="에코 크레딧 100P",
-            created_by=1
+            created_by=admin_user_id
         ),
         schemas.ChallengeCreate(
             title="친환경 이동 30일",
-            description="30일 연속 친환경 교통수단 이용하기",
+            description="30일 연속 친환경 교통수단 이용하기 (총 10회 이상)",
             scope=schemas.ChallengeScope.PERSONAL,
             target_mode=schemas.TransportMode.ANY,
-            target_saved_g=15000, # 15kg
-            start_at=datetime.utcnow() - timedelta(days=15),
-            end_at=datetime.utcnow() + timedelta(days=15),
+            goal_type=schemas.ChallengeGoalType.TRIP_COUNT,
+            goal_target_value=10.0, # 10 trips
+            start_at=now,
+            end_at=now + timedelta(days=30),
             reward="에코 크레딧 300P + 특별 뱃지",
-            created_by=1
+            created_by=admin_user_id
         )
     ]
 

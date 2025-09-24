@@ -7,10 +7,12 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from backend.routes.ai_challenge_router import AICallengeCreateRequest, create_and_join_ai_challenge
+from backend.routes.dashboard import get_dashboard # Import get_dashboard
 from backend.database import get_db
 from backend.dependencies import get_current_user
 from sqlalchemy.orm import Session
-from backend.models import User # User 모델 임포트
+from backend import crud # crud 모듈 임포트
+from backend.models import User, TransportMode, Challenge, ChallengeMember # User 모델 임포트
 
 # --- 설정 ---
 AWS_DEFAULT_REGION = "us-east-1"
@@ -167,21 +169,32 @@ async def chatbot_endpoint(request: ChatRequest):
     print("[1단계] 사용자의 질문 의도를 파악합니다...")
     router_system_prompt = f"""
     You are a smart orchestrator that analyzes the user's question and decides which action to take.
-    You must choose one of the following four actions and respond only in JSON format. Do not add any other explanations.
+    You must choose one of the following six actions and respond only in JSON format. Do not add any other explanations.
 
     1. "knowledge_base_search": Choose this when the user's question is likely to be answered by a private knowledge base, containing specific information about people, projects, or internal documents. Specific topics like 'carbon reduction' or 'recycling' can also belong here.
-       - Example: {{\"action\": \"knowledge_base_search\", \"query\": \"information about ecomileage-seoul\"}}
-       - Example: {{\"action\": \"knowledge_base_search\", \"query\": \"how to recycle plastic\"}}
+       - Example: {{"action": "knowledge_base_search", "query": "information about ecomileage-seoul"}}
+       - Example: {{"action": "knowledge_base_search", "query": "how to recycle plastic"}}
 
     2. "general_search": Choose this when the user's question requires up-to-date information or general knowledge that is unlikely to be in a private knowledge base, such as 'today's weather' or 'news about celebrities'.
-       - Example: {{\"action\": \"general_search\", \"query\": \"today's weather in Seoul\"}}
+       - Example: {{"action": "general_search", "query": "today's weather in Seoul"}}
 
     3. "recommend_challenge": Choose this when the user explicitly asks for a challenge recommendation or expresses a desire to start a new eco-friendly challenge.
-       - Example: {{\"action\": \"recommend_challenge\", \"user_intent\": \"recommend an eco-friendly challenge\"}}
-       - Example: {{\"action\": \"recommend_challenge\", \"user_intent\": \"I want to start a new challenge\"}}
+       - Example: {{"action": "recommend_challenge", "user_intent": "recommend an eco-friendly challenge"}}
+       - Example: {{"action": "recommend_challenge", "user_intent": "I want to start a new challenge"}}
 
-    4. "direct_answer": Choose this for simple greetings or small talk, like "Hello", "Thank you", or "Who are you?".
-       - Example: {{\"action\": \"direct_answer\", \"answer\": \"Hello! I am an AI chatbot here to answer your questions. Ask me anything!\"}}
+    4. "get_carbon_reduction_tip": Choose this when the user asks for tips on reducing carbon emissions or eco-friendly practices.
+       - Example: {{"action": "get_carbon_reduction_tip", "user_intent": "give me a tip for reducing carbon"}}
+       - Example: {{"action": "get_carbon_reduction_tip", "user_intent": "how can I be more eco-friendly?"}}
+
+    5. "get_goal_strategy": Choose this when the user asks for strategies to achieve their eco-friendly goals or improve their progress.
+       - Example: {{"action": "get_goal_strategy", "user_intent": "how can I achieve my carbon reduction goal?"}}
+       - Example: {{"action": "get_goal_strategy", "user_intent": "give me a strategy to improve my eco-score"}}
+
+    6. "direct_answer": Choose this for simple greetings or small talk, like "Hello", "Thank you", or "Who are you?".
+       - Example: {{"action": "direct_answer", "answer": "Hello! I am an AI chatbot here to answer your questions. Ask me anything!"}}
+
+    7. "detect_activity_and_suggest_challenge": Choose this when the user mentions a specific eco-friendly action they have taken, like "I walked to work" or "I took the bus today". This is different from asking for a recommendation.
+       - Example: {{"action": "detect_activity_and_suggest_challenge", "activity": "rode a bike"}}
 
     User question: "{user_query}"
     Your JSON response:
@@ -250,24 +263,149 @@ async def chatbot_endpoint(request: ChatRequest):
 
             final_answer = invoke_llm(final_answer_system_prompt, f"<search_results>\n{search_results}\n</search_results>\n\n사용자 질문: {user_query}")
 
+    elif action == "detect_activity_and_suggest_challenge":
+        print("[알림] 조율자 판단: 'detect_activity_and_suggest_challenge'. 활동 감지 및 챌린지 추천/검증을 시작합니다.")
+        db = next(get_db())
+        
+        # 활동 키워드 및 해당 TransportMode 매핑
+        activity_keywords = {
+            "자전거": TransportMode.BIKE,
+            "걸어서": TransportMode.WALK,
+            "도보": TransportMode.WALK,
+            "버스": TransportMode.BUS,
+            "지하철": TransportMode.SUBWAY,
+        }
+        
+        detected_activity_mode = None
+        detected_keyword = None
+        for keyword, mode in activity_keywords.items():
+            if keyword in user_query:
+                detected_activity_mode = mode
+                detected_keyword = keyword
+                break
+
+        if not detected_activity_mode:
+            # 관련 활동이 감지되지 않으면 일반 답변으로 전환
+            final_answer = invoke_llm("You are a friendly AI assistant.", user_query)
+            return {"response": final_answer}
+
+        # 사용자의 오늘 활동 기록 확인 (Task 2.3)
+        from datetime import date, timedelta
+        today_start = date.today()
+        # KST 고려 (UTC+9)
+        utc_today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=9)
+        if datetime.utcnow().hour < 9: # UTC 기준 00:00-08:59는 한국의 같은 날
+             utc_today_start -= timedelta(days=1)
+        utc_today_end = utc_today_start + timedelta(days=1)
+
+
+        mobility_log = db.query(models.MobilityLog).filter(
+            models.MobilityLog.user_id == user_id,
+            models.MobilityLog.transport_mode == detected_activity_mode,
+            models.MobilityLog.started_at >= utc_today_start,
+            models.MobilityLog.started_at < utc_today_end
+        ).order_by(models.MobilityLog.started_at.desc()).first()
+
+        if mobility_log:
+            # True Case (2.3): 활동 기록이 있을 경우
+            print(f"[알림] 사용자의 '{detected_activity_mode.value}' 활동 기록을 확인했습니다.")
+            
+            # 추가 크레딧 지급 로직 (예: 거리 1km당 5 크레딧)
+            bonus_credits = int(mobility_log.distance_km * 5)
+            
+            # 크레딧 추가
+            crud.create_credit_log(db, user_id=user_id, points=bonus_credits, reason=f"챗봇 활동 확인 보너스: {detected_keyword}")
+            
+            response_text = f"네! 오늘 {mobility_log.distance_km:.1f}km를 {detected_keyword}(으)로 이동하신 기록을 확인했어요. 정말 멋져요! 추가 보너스로 {bonus_credits}C를 드렸습니다. 🎁"
+            final_answer = response_text
+            return {"response": final_answer}
+
+        else:
+            # False Case (2.3) / Challenge Suggestion (2.2): 활동 기록이 없을 경우
+            print(f"[알림] 사용자의 '{detected_activity_mode.value}' 활동 기록이 없습니다. 관련 챌린지를 찾아봅니다.")
+            
+            # 참여 가능한 관련 챌린지 검색
+            joined_challenge_ids = {m.challenge_id for m in db.query(models.ChallengeMember).filter(models.ChallengeMember.user_id == user_id).all()}
+            
+            available_challenges = db.query(models.Challenge).filter(
+                models.Challenge.challenge_id.notin_(joined_challenge_ids),
+                models.Challenge.title.contains(detected_keyword)
+            ).all()
+
+            if available_challenges:
+                # 관련 챌린지가 있을 경우 제안
+                suggested_challenge = available_challenges[0]
+                
+                suggestion_prompt = f'''
+                You are a friendly and encouraging AI assistant.
+                A user mentioned they did an activity: "{user_query}".
+                Your task is to naturally praise their action and suggest the following challenge.
+                Keep the response concise and friendly.
+                
+                Challenge to suggest:
+                - Title: {suggested_challenge.title}
+                - Description: {suggested_challenge.description}
+                
+                Your response should end with a question asking if they want to join.
+                Example: "자전거를 타셨군요! 정말 좋은 습관이에요. 혹시 '{suggested_challenge.title}'에 참여해보시는 건 어떨까요?"
+                '''
+                
+                response_text = invoke_llm(suggestion_prompt, "")
+                
+                return {{
+                    "response": response_text,
+                    "suggestion": {{
+                        "type": "challenge",
+                        "challenge_id": suggested_challenge.challenge_id,
+                        "title": suggested_challenge.title
+                    }}
+                }}
+            else:
+                # 관련 챌린지가 없을 경우
+                final_answer = f"아, 그러셨군요! 아쉽게도 오늘 {detected_keyword} 이동 기록이 확인되지 않네요. 이동 기록이 있어야 보너스 크레딧을 받을 수 있어요."
+                return {{"response": final_answer}}
+
     elif action == "recommend_challenge":
         print("[알림] 조율자 판단: 'recommend_challenge'. AI 챌린지를 추천하고 생성합니다.")
+        
+        # 사용자 대시보드 데이터 가져오기
+        db_session = next(get_db())
+        current_user_obj = db_session.query(User).filter(User.user_id == user_id).first()
+        if not current_user_obj:
+            raise HTTPException(status_code=404, detail="User not found for challenge recommendation.")
+        
+        dashboard_data = await get_dashboard(current_user=current_user_obj, db=db_session)
         
         # LLM에게 챌린지 아이디어를 요청하는 프롬프트
         challenge_prompt = f"""
         You are an AI assistant that generates eco-friendly challenge ideas.
-        Based on the user's intent, generate a single challenge idea in JSON format.
+        Based on the user's intent and their recent activity data, generate a single challenge idea in JSON format.
         The challenge should be simple, actionable, and encourage carbon reduction.
-        Provide a title, a short description, a reward (integer, e.g., 100), and optionally a target_mode (ANY, WALK, BIKE, PUBLIC_TRANSPORT), target_saved_g (float), or target_distance_km (float).
-        If no specific mode or target is implied, use default values.
+        Prioritize light challenges that the user hasn't done much recently, or suggest new types of activities.
+        Avoid recommending challenges for activities the user has frequently done in the last 7 days.
         
-        Example JSON format:
+        User's recent activity data:
+        - Last 7 days carbon saved (g): {json.dumps([{{"date": str(d.date), "saved_g": d.saved_g}} for d in dashboard_data.last7days])}
+        - Mode statistics: {json.dumps([{{"mode": m.mode, "saved_g": m.saved_g}} for m in dashboard_data.modeStats])}
+        - Total carbon saved (kg): {dashboard_data.total_saved}
+        - Current garden level: {dashboard_data.garden_level}
+        
+        Provide a title, a short description, a reward (integer, e.g., 100), a goal_type (CO2_SAVED, DISTANCE_KM, TRIP_COUNT), a goal_target_value (float), and optionally a target_mode (ANY, WALK, BIKE, PUBLIC_TRANSPORT).
+        If no specific mode is implied, use default values.
+        
+        Example JSON format for a light challenge:
         {{
-            "title": "하루 1시간 걷기 챌린지",
-            "description": "매일 1시간씩 걸어서 탄소 발자국을 줄여보세요!",
-            "reward": 50,
-            "target_mode": "WALK",
-            "target_distance_km": 3.0
+            "title": "분리수거 챌린지",
+            "description": "오늘 하루 분리수거를 완벽하게 실천해 보세요!",
+            "reward": 20,
+            "target_mode": "ANY"
+        }}
+        Example JSON format for another light challenge:
+        {{
+            "title": "샤워 10분 챌린지",
+            "description": "샤워 시간을 10분 이내로 줄여 물과 에너지를 절약해 보세요!",
+            "reward": 30,
+            "target_mode": "ANY"
         }}
         
         User intent: "{router_decision.get("user_intent", user_query)}"
@@ -285,23 +423,16 @@ async def chatbot_endpoint(request: ChatRequest):
                 description=challenge_idea.get("description", "AI가 추천하는 친환경 챌린지입니다."),
                 reward=challenge_idea.get("reward", 30),
                 target_mode=TransportMode[challenge_idea.get("target_mode", "ANY").upper()] if challenge_idea.get("target_mode") else TransportMode.ANY,
-                target_saved_g=challenge_idea.get("target_saved_g"),
-                target_distance_km=challenge_idea.get("target_distance_km")
+                goal_type=schemas.ChallengeGoalType[challenge_idea.get("goal_type", "CO2_SAVED").upper()],
+                goal_target_value=challenge_idea.get("goal_target_value", 1000.0)
             )
             
-            # 의존성 주입을 위한 임시 세션 및 사용자 객체
-            db_session = next(get_db()) # get_db는 제너레이터이므로 next()로 세션 얻기
+            # 실제 User 객체를 데이터베이스에서 조회 (이미 위에서 current_user_obj로 가져옴)
             
-            # 실제 User 객체를 데이터베이스에서 조회
-            actual_current_user = db_session.query(User).filter(User.user_id == user_id).first()
-            
-            if not actual_current_user:
-                raise HTTPException(status_code=404, detail="User not found for challenge creation.")
-
             challenge_response = await create_and_join_ai_challenge(
                 request=challenge_request,
                 db=db_session,
-                current_user=actual_current_user # 실제 User 객체 전달
+                current_user=current_user_obj # 실제 User 객체 전달
             )
             
             final_answer = challenge_response.get("message", "AI 챌린지 생성 및 참여에 실패했습니다.")
@@ -314,6 +445,24 @@ async def chatbot_endpoint(request: ChatRequest):
         except Exception as e:
             print(f"[오류] AI 챌린지 생성 및 참여 중 오류 발생: {e}")
             final_answer = f"AI 챌린지 생성 및 참여 중 오류가 발생했습니다: {e}"
+
+    elif action == "get_carbon_reduction_tip":
+        print("[알림] 조율자 판단: 'get_carbon_reduction_tip'. 탄소 절감 팁을 생성합니다.")
+        tip_system_prompt = f"""
+        You are an AI assistant that provides concise and actionable tips for carbon reduction and eco-friendly practices.
+        Generate a single, practical tip based on the user's intent.
+        The tip should be encouraging and easy to understand.
+        """
+        final_answer = invoke_llm(tip_system_prompt, router_decision.get("user_intent", user_query))
+
+    elif action == "get_goal_strategy":
+        print("[알림] 조율자 판단: 'get_goal_strategy'. 목표 달성 전략을 생성합니다.")
+        strategy_system_prompt = f"""
+        You are an AI assistant that provides effective strategies for achieving eco-friendly goals and improving progress.
+        Generate a single, actionable strategy based on the user's intent.
+        The strategy should be motivating and provide clear steps.
+        """
+        final_answer = invoke_llm(strategy_system_prompt, router_decision.get("user_intent", user_query))
 
     elif action == "direct_answer":
         print("[알림] 조율자 판단: 'direct_answer'. 즉시 답변합니다.")

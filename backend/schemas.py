@@ -1,7 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, computed_field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
+from backend.models import User # Add this line
 
 # --------------------------
 # ENUM 정의 (모든 Enum을 여기에 모음)
@@ -27,6 +28,26 @@ class GardenStatusEnum(str, Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
 
+# New Enums from models.py
+class GroupRole(str, Enum):
+    LEADER = "leader"
+    MEMBER = "member"
+
+class ChallengeStatus(str, Enum):
+    UPCOMING = "upcoming"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+class ChallengeGoalType(str, Enum):
+    CO2_SAVED = "CO2_SAVED"
+    DISTANCE_KM = "DISTANCE_KM"
+    TRIP_COUNT = "TRIP_COUNT"
+
+class GoalType(str, Enum):
+    CO2_REDUCTION = "co2_reduction"
+    ACTIVITY_COUNT = "activity_count"
+
 # --------------------------
 # 스키마 정의 (BaseModel 클래스)
 # --------------------------
@@ -37,6 +58,7 @@ class CreditBalance(BaseModel):
     total_points: int
     recent_earned: int
     last_updated: datetime
+    total_carbon_reduced_g: float # Add total_carbon_reduced_g field
     class Config:
         from_attributes = True
 
@@ -140,13 +162,15 @@ class Challenge(BaseModel):
     title: str
     description: Optional[str] = None
     scope: str
-    target_mode: str
-    target_saved_g: int
+    target_mode: TransportMode
+    goal_type: ChallengeGoalType
+    goal_target_value: float
     start_at: datetime
     end_at: datetime
     reward: Optional[str] = None # Added reward field
     created_by: Optional[int] = None
     created_at: datetime
+    status: ChallengeStatus # Add status field
 
 class ChallengeMember(BaseModel):
     challenge_id: int
@@ -158,7 +182,8 @@ class ChallengeBase(BaseModel):
     description: Optional[str] = None
     scope: ChallengeScope
     target_mode: TransportMode
-    target_saved_g: int
+    goal_type: ChallengeGoalType
+    goal_target_value: float
     start_at: datetime
     end_at: datetime
     reward: Optional[str] = None
@@ -170,9 +195,12 @@ class FrontendChallenge(BaseModel):
     id: int
     title: str
     description: Optional[str] = None
-    progress: int # Percentage
+    progress: float # Percentage
     reward: Optional[str] = None
     is_joined: bool # New field
+    status: ChallengeStatus # Add status field
+    goal_type: ChallengeGoalType
+    goal_target_value: float
 
 class ChallengeRecommendationRequest(BaseModel):
     user_id: int
@@ -180,7 +208,8 @@ class ChallengeRecommendationRequest(BaseModel):
     description: Optional[str] = None
     scope: ChallengeScope
     target_mode: TransportMode
-    target_saved_g: int
+    goal_type: ChallengeGoalType
+    goal_target_value: float
     start_at: datetime
     end_at: datetime
     reward: Optional[str] = None
@@ -213,8 +242,18 @@ class User(BaseModel):
     username: str
     email: Optional[str] = None
     user_group_id: Optional[int] = None
-    role: str
-    created_at: datetime
+    role: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class UserSchemaForGroupMember(BaseModel):
+    user_id: int
+    username: str
+
+    class Config:
+        from_attributes = True
 
 class UserRead(User):
     class Config:
@@ -258,6 +297,62 @@ class UserContext(BaseModel):
     username: str
     group_name: Optional[str] = None
     group_type: Optional[str] = None
+
+# --------------------------
+# SOCIAL GROUPS (New)
+# --------------------------
+class GroupMember(BaseModel):
+    user_id: int
+    user: UserSchemaForGroupMember # Use nested schema
+    role: GroupRole
+    joined_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class GroupBase(BaseModel):
+    name: str = Field(..., max_length=100)
+    description: Optional[str] = None
+    max_members: Optional[int] = Field(50, gt=1, le=100)
+
+class GroupCreateWithUsernames(GroupBase):
+    usernames: List[str] = Field(..., min_items=1)
+
+class Group(GroupBase):
+    group_id: int
+    invite_code: str
+    created_by: int
+    created_at: datetime
+    is_active: bool
+    members: List[GroupMember]
+
+    class Config:
+        from_attributes = True
+
+class GroupUpdate(GroupBase):
+    pass
+
+class GroupChallengeCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    goal_type: GoalType = GoalType.CO2_REDUCTION
+    goal_value: float
+    start_date: datetime
+    end_date: datetime
+
+class GroupChallenge(GroupChallengeCreate):
+    challenge_id: int
+    group_id: int
+    status: ChallengeStatus
+    created_by: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class GroupChallengeResponse(GroupChallenge):
+    progress: float
+    completion_percentage: float
 
 # 탄소 배출 계수 스키마
 class CarbonFactor(BaseModel):
@@ -319,3 +414,21 @@ class MobilityLogResponse(BaseModel):
     end_point: Optional[str] = None
     class Config:
         from_attributes = True
+
+# 개인 탄소 발자국 스키마
+class PersonalCarbonFootprint(BaseModel):
+    user_id: int
+    total_carbon_reduced_kg: float
+    daily_average_kg: float
+    weekly_average_kg: float
+    monthly_average_kg: float
+    breakdown_by_mode: List[ModeStat] # Reusing ModeStat from DashboardStats
+    historical_daily_data: List[DailyStats] # Reusing DailyStats from statistics
+    comparison_to_national_average_kg: Optional[float] = None
+    projection_annual_kg: Optional[float] = None
+    last_updated: datetime
+
+class CarbonFootprintRequest(BaseModel):
+    user_id: int
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None

@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, and_
@@ -9,7 +10,7 @@ from backend.database import get_db
 from ..models import User, CreditsLedger, MobilityLog, UserGarden, GardenWateringLog
 from backend.schemas import (
     StatisticsOverview, RegionalStatistics, LeaderboardEntry, 
-    FriendsComparison, UserRanking
+    FriendsComparison, UserRanking, PersonalCarbonFootprint
 )
 from backend.utils.public_data_api import public_data_api
 
@@ -77,8 +78,8 @@ async def get_regional_statistics(region: str, db: Session = Depends(get_db)):
         # 데이터베이스에서 사용자 통계 계산
         total_users = db.query(User).count()
         
-        # 지역별 가중치 (임시)
-        region_weights = {
+        # 지역별 가중치 (환경 변수에서 로드)
+        DEFAULT_REGION_WEIGHTS = {
             "서울특별시": 0.25,
             "경기도": 0.20,
             "인천광역시": 0.08,
@@ -90,6 +91,8 @@ async def get_regional_statistics(region: str, db: Session = Depends(get_db)):
             "세종특별자치시": 0.03,
             "기타": 0.12
         }
+        region_weights_json = os.getenv("REGION_WEIGHTS_JSON", json.dumps(DEFAULT_REGION_WEIGHTS))
+        region_weights = json.loads(region_weights_json)
         
         weight = region_weights.get(region, 0.12)
         regional_users = int(total_users * weight)
@@ -339,6 +342,94 @@ async def get_user_ranking(user_id: int, db: Session = Depends(get_db)):
             percentile=75.0,
             last_updated=datetime.utcnow()
         )
+
+# 개인 탄소 발자국 조회
+@router.get("/carbon-footprint", response_model=PersonalCarbonFootprint)
+async def get_personal_carbon_footprint(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> PersonalCarbonFootprint:
+    """개인 탄소 발자국 및 절감량 상세 분석을 조회합니다."""
+    user_id = current_user.user_id
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 1. 총 탄소 절감량 (kg)
+    total_carbon_saved_g = db.query(func.sum(MobilityLog.co2_saved_g)).filter(
+        MobilityLog.user_id == user_id
+    ).scalar() or 0
+    total_carbon_reduced_kg = round(total_carbon_saved_g / 1000, 2)
+
+    # 2. 일별, 주별, 월별 평균
+    # 모든 활동 기간
+    first_activity = db.query(func.min(MobilityLog.created_at)).filter(
+        MobilityLog.user_id == user_id
+    ).scalar()
+    
+    daily_average_kg = 0.0
+    weekly_average_kg = 0.0
+    monthly_average_kg = 0.0
+
+    if first_activity:
+        total_days = (datetime.utcnow().date() - first_activity.date()).days + 1
+        if total_days > 0:
+            daily_average_kg = round(total_carbon_reduced_kg / total_days, 2)
+            weekly_average_kg = round(daily_average_kg * 7, 2)
+            monthly_average_kg = round(daily_average_kg * 30, 2) # 대략적인 월 평균
+
+    # 3. 교통수단별 절감량
+    mode_stats_data = db.query(
+        MobilityLog.mode,
+        func.sum(MobilityLog.co2_saved_g)
+    ).filter(MobilityLog.user_id == user_id).group_by(MobilityLog.mode).all()
+    breakdown_by_mode = [ModeStat(mode=m, saved_g=s) for m, s in mode_stats_data]
+
+    # 4. 과거 일별 데이터 (예: 최근 30일)
+    historical_daily_data_raw = db.query(
+        func.date(MobilityLog.created_at),
+        func.sum(MobilityLog.co2_saved_g),
+        func.sum(MobilityLog.points_earned),
+        func.count(MobilityLog.log_id)
+    ).filter(
+        MobilityLog.user_id == user_id,
+        MobilityLog.created_at >= datetime.utcnow().date() - timedelta(days=30)
+    ).group_by(func.date(MobilityLog.created_at)).order_by(func.date(MobilityLog.created_at)).all()
+
+    historical_daily_data = []
+    for date_str, co2_g, points, count in historical_daily_data_raw:
+        historical_daily_data.append(DailyStats(
+            date=str(date_str),
+            co2_saved=round(co2_g / 1000, 2),
+            points_earned=points,
+            activities_count=count
+        ))
+
+    # 5. 전국 평균과의 비교 (get_statistics_overview 재사용)
+    national_average_carbon_kg = 0.0
+    try:
+        overview = await get_statistics_overview(db=db)
+        national_average_carbon_kg = overview.national_average_carbon_kg
+    except Exception as e:
+        print(f"Error fetching national average for carbon footprint: {e}")
+        # Fallback if overview fails
+        national_average_carbon_kg = 12.5 # Hardcoded fallback for national average
+
+    # 6. 연간 예상 절감량
+    projection_annual_kg = round(daily_average_kg * 365, 2)
+
+    return PersonalCarbonFootprint(
+        user_id=user_id,
+        total_carbon_reduced_kg=total_carbon_reduced_kg,
+        daily_average_kg=daily_average_kg,
+        weekly_average_kg=weekly_average_kg,
+        monthly_average_kg=monthly_average_kg,
+        breakdown_by_mode=breakdown_by_mode,
+        historical_daily_data=historical_daily_data,
+        comparison_to_national_average_kg=national_average_carbon_kg,
+        projection_annual_kg=projection_annual_kg,
+        last_updated=datetime.utcnow()
+    )
 
 # 공공데이터 API 테스트 엔드포인트
 @router.get("/test/public-data/{region}")

@@ -1,44 +1,5 @@
-# Ecooo 통합 프로젝트 (서울시 AI 해커톤)
-
-이 프로젝트는 두 개의 기존 Ecooo 프로젝트를 병합하여 챌린지, 챗봇, 대시보드, 크레딧 등 모든 기능을 포함하는 하나의 일관된 애플리케이션을 제공합니다.
-
 ## 프로젝트 구조
 
-최종 프로젝트는 `ecoooo_front_ver/ecoooo` 폴더를 기반으로 합니다.
-
-```
-C:/Users/coron/OneDrive/바탕 화면/2025.2-2/seoul25_AI_ht/gitHub/ecoooo_front_ver/ecoooo/
-├───backend/
-│   ├───__pycache__/
-│   ├───routes/
-│   ├───... (기존 파일 및 병합된 파일)
-│   ├───bedrock_logic.py (새로 추가됨)
-│   ├───seed_admin_user.py (새로 추가됨)
-│   └───seed_challenges.py (새로 추가됨)
-├───frontend/
-│   ├───node_modules/
-│   ├───public/
-│   ├───src/
-│   │   ├───components/
-│   │   │   └───GeneratedPlant.tsx (새로 추가됨)
-│   │   ├───contexts/
-│   │   ├───pages/
-│   │   │   ├───Achievements.tsx (새로 추가됨)
-│   │   │   ├───AdminPage.tsx (새로 추가됨)
-│   │   │   ├───CreditPoints.tsx (새로 추가됨)
-│   │   │   ├───CreditRecent.tsx (새로 추가됨)
-│   │   │   └───Register.tsx (새로 추가됨)
-│   │   └───ServicePage.tsx (새로 추가됨)
-│   └───...
-├───.env (새로 생성 필요)
-├───.gitignore
-├───ecoooo.db (SQLite 사용 시 생성됨)
-└───README.md (현재 파일)
-```
-
-## 프로젝트 설정 및 실행 방법
-
-프로젝트를 로컬에서 실행하려면 다음 단계를 따르십시오.
 
 ### 1. 가상 환경 설정 (Python Backend)
 
@@ -143,8 +104,8 @@ npm start
 
 
 백엔드 서버 실행
-py -3.11 -m venv .venv
-.\.venv\Scripts\activate
+py -3.11 -m venv venv
+.\venv\Scripts\activate
 cd backend
 pip install -r requirements.txt
 cd ..

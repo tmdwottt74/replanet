@@ -6,15 +6,16 @@ from datetime import datetime, timedelta
 
 from backend.database import get_db
 from backend.dependencies import get_current_user
-from backend.models import User, Challenge, ChallengeMember, ChallengeCompletionType, TransportMode
+from backend.models import User, Challenge, ChallengeMember, ChallengeCompletionType, TransportMode, ChallengeGoalType
+from backend import schemas
 
 class AICallengeCreateRequest(BaseModel):
     title: str
     description: str
     reward: int
     target_mode: Optional[TransportMode] = TransportMode.ANY
-    target_saved_g: Optional[float] = None
-    target_distance_km: Optional[float] = None
+    goal_type: schemas.ChallengeGoalType
+    goal_target_value: float
 
 router = APIRouter(
     prefix="/api/ai-challenges",
@@ -38,8 +39,8 @@ async def create_and_join_ai_challenge(
             scope="PERSONAL",
             completion_type=ChallengeCompletionType.MANUAL,
             target_mode=request.target_mode,
-            target_saved_g=request.target_saved_g,
-            target_distance_km=request.target_distance_km,
+            goal_type=request.goal_type,
+            goal_target_value=request.goal_target_value,
             start_at=datetime.utcnow(),
             end_at=datetime.utcnow() + timedelta(days=7), # Give user a week to complete
             reward=f"{request.reward}C",
