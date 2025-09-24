@@ -61,7 +61,7 @@ const styles = `
 }
 
 .progress-fill {
-  background: linear-gradient(90deg, #66bb6a, #43a047);
+  background: linear-gradient(90deg, #42a5f5, #2196f3); /* 파란색 계열로 변경 */
   height: 100%;
   transition: width 0.3s ease;
 }
@@ -105,6 +105,7 @@ interface ChallengeData {
   progress: number;
   reward: string;
   is_joined: boolean; // 서버에서 받아올 참여 여부
+  status: string; // 챌린지 상태 추가 (예: 'active', 'completed')
 }
 
 const Challenge: React.FC = () => {
@@ -206,13 +207,20 @@ const Challenge: React.FC = () => {
               <p className="reward">🎁 보상: {c.reward}</p>
 
               {c.is_joined ? (
-                <button className="join-btn" disabled>
-                  참여중
-                </button>
-              ) : (
+                c.status === 'completed' ? ( // 챌린지가 완료된 경우
+                  <button className="join-btn" disabled style={{ backgroundColor: '#4CAF50' }}>
+                    완료됨
+                  </button>
+                ) : ( // 참여 중인 챌린지 (완료되지 않음)
+                  <button className="join-btn" disabled>
+                    참여중
+                  </button>
+                )
+              ) : ( // 참여하지 않은 챌린지
                 <button 
                   className="join-btn"
                   onClick={() => handleJoinChallenge(c.id)}
+                  disabled={c.status === 'completed' || c.status === 'cancelled'} // 완료되거나 취소된 챌린지는 참여 불가
                 >
                   참여하기
                 </button>

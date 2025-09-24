@@ -24,7 +24,7 @@ interface CreditsContextType {
 
 const CreditsContext = createContext<CreditsContextType | undefined>(undefined);
 
-const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 export const getAuthHeaders = () => {
   const token = localStorage.getItem('access_token');
@@ -63,7 +63,7 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
       // 크레딧 잔액 가져오기
       const creditsResponse = await fetch(`${API_URL}/api/credits/balance`, { headers: getAuthHeaders() });
       if (!creditsResponse.ok) throw new Error('Failed to fetch credits');
-      const creditsData = await creditsResponse.json();
+      const creditsDataFromBalance = await creditsResponse.json();
 
       // 정원 상태 가져오기
       const gardenResponse = await fetch(`${API_URL}/api/credits/garden/${user.id}`, { headers: getAuthHeaders() });
@@ -83,11 +83,12 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
 
       // 항상 백엔드에서 가져온 최신 값을 사용
-      let finalCredits = creditsData.total_points || 0; // Use data from backend API call directly
+      let finalCredits = creditsDataFromBalance.total_points || 0; // Use data from backend API call directly
+      let finalCarbonReduced = creditsDataFromBalance.total_carbon_reduced_g || 0; // Use data from balance endpoint
 
       const newCreditsData = {
         totalCredits: finalCredits,
-        totalCarbonReduced: gardenData.total_carbon_reduced || 0,
+        totalCarbonReduced: finalCarbonReduced, // Use the correct value
         recentEarned,
         lastUpdated: new Date().toISOString(),
       };

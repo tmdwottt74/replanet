@@ -44,26 +44,7 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleSocialLogin = async (provider: string) => {
-    setIsLoading(true);
-    
-    try {
-      // 소셜 로그인 시뮬레이션 (실제 기능 없음)
-      const demoUser = {
-        id: '1',
-        name: provider === 'google' ? '구글 사용자' : '카카오 사용자',
-        email: `${provider}@example.com`,
-        role: '사용자'
-      };
-      
-      localStorage.setItem('eco-user', JSON.stringify(demoUser));
-      navigate('/');
-    } catch (error) {
-      alert(`${provider} 로그인 중 오류가 발생했습니다.`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  
 
   return (
     <div className="auth-container">
@@ -143,30 +124,7 @@ const Login: React.FC = () => {
             {isLoading ? '로그인 중...' : '로그인'}
           </button>
 
-          <div className="divider">
-            <span>또는</span>
-          </div>
-
-          <div className="social-login">
-            <button 
-              type="button" 
-              className="social-btn google"
-              onClick={() => handleSocialLogin('google')}
-              disabled={isLoading}
-            >
-              <span className="social-icon">🔍</span>
-              Google로 로그인
-            </button>
-            <button 
-              type="button" 
-              className="social-btn kakao"
-              onClick={() => handleSocialLogin('kakao')}
-              disabled={isLoading}
-            >
-              <span className="social-icon">💬</span>
-              Kakao로 로그인
-            </button>
-          </div>
+          
 
           <div className="auth-footer">
             <p>

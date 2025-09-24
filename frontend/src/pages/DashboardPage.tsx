@@ -2,6 +2,15 @@ import React, { useState, useEffect } from "react";
 import { useCredits } from "../contexts/CreditsContext";
 import { Link } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import "../App.css";
 import "./DashboardPage.css";
 
@@ -38,7 +47,7 @@ const DashboardPage: React.FC = () => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = useState<string | null>(null);
 
-  const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('access_token');
@@ -103,7 +112,7 @@ const DashboardPage: React.FC = () => {
       setData(prev => prev ? {
         ...prev,
         total_points: creditsData.totalCredits,
-        total_saved: creditsData.totalCarbonReduced,
+        total_saved: parseFloat((creditsData.totalCarbonReduced / 1000).toFixed(1)),
         // 실시간으로 오늘 절약량도 업데이트
         // co2_saved_today: 1850, // 고정값으로 설정 (실제로는 오늘의 절감량이어야 함) - Remove hardcoded value
         eco_credits_earned: creditsData.totalCredits,
@@ -124,6 +133,19 @@ const DashboardPage: React.FC = () => {
   // ✅ 챗봇으로 이동하는 함수
   const goToChat = () => {
     window.location.href = '/chat';
+  };
+
+  // ✅ 차트 데이터 다운로드 함수
+  const handleDownloadChartData = (chartData: DailySaving[]) => {
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + chartData.map(e => `${e.date},${e.saved_g}`).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "carbon_reduction_data.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // ✅ 상태 처리
@@ -191,202 +213,77 @@ const DashboardPage: React.FC = () => {
       {/* 📈 최근 7일 절감량 */}
       <div style={{ marginTop: "2rem" }}>
         <h4 style={{ fontSize: "1.3rem", marginBottom: "1.5rem" }}>📈 최근 7일 절감량 추이</h4>
-        <div style={{ 
-          background: "linear-gradient(135deg, #ffffff 0%, #f8fffe 100%)", 
-          padding: "2.5rem", 
+        <div style={{
+          background: "linear-gradient(135deg, #ffffff 0%, #f8fffe 100%)",
+          padding: "2.5rem",
           borderRadius: "20px",
           border: "1px solid rgba(26, 188, 156, 0.1)",
           boxShadow: "0 8px 25px rgba(26, 188, 156, 0.1)",
           position: "relative",
-          overflow: "hidden"
+          overflow: "hidden",
+          height: "300px" // Set a fixed height for ResponsiveContainer
         }}>
-          {/* 차트 배경 그리드 */}
-          <div style={{
-            position: "absolute",
-            top: "2.5rem",
-            left: "2.5rem",
-            right: "2.5rem",
-            height: "180px",
-            background: `
-              linear-gradient(to right, rgba(26, 188, 156, 0.1) 1px, transparent 1px),
-              linear-gradient(to bottom, rgba(26, 188, 156, 0.1) 1px, transparent 1px)
-            `,
-            backgroundSize: "20px 30px",
-            zIndex: 1
-          }}></div>
-          
-          {/* Y축 라벨 */}
-          <div style={{
-            position: "absolute",
-            left: "2rem",
-            top: "2.5rem",
-            height: "180px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            zIndex: 2
-          }}>
-            {[2000, 1500, 1000, 500, 0].map((value) => (
-              <span key={value} style={{ 
-                fontSize: "0.75rem", 
-                color: "#6b7280",
-                fontWeight: "600",
-                background: "rgba(255, 255, 255, 0.9)",
-                padding: "2px 6px",
-                borderRadius: "4px"
-              }}>
-                {value}g
-              </span>
-            ))}
-          </div>
-
-          {/* Y축 제목 */}
-          <div style={{
-            position: "absolute",
-            left: "0.8rem",
-            top: "50%",
-            transform: "translateY(-50%) rotate(-90deg)",
-            fontSize: "0.85rem",
-            color: "#4a5568",
-            fontWeight: "700",
-            zIndex: 2,
-            background: "rgba(255, 255, 255, 0.9)",
-            padding: "4px 8px",
-            borderRadius: "4px"
-          }}>
-            탄소 절감량 (g)
-          </div>
-
-          {/* 차트 바 */}
-          <div style={{ 
-            display: "flex", 
-            justifyContent: "space-between", 
-            alignItems: "end", 
-            height: "180px", 
-            marginBottom: "1.5rem",
-            paddingLeft: "4rem",
-            paddingRight: "1rem",
-            position: "relative",
-            zIndex: 3
-          }}>
-            {data?.last7days?.map((day, index) => {
-              const maxValue = Math.max(...data.last7days.map(d => d.saved_g));
-              const height = (day.saved_g / maxValue) * 150;
-              return (
-                <div key={index} style={{ 
-                  display: "flex", 
-                  flexDirection: "column", 
-                  alignItems: "center",
-                  flex: 1,
-                  margin: "0 4px",
-                  position: "relative"
-                }}>
-                  {/* 호버 효과를 위한 투명한 영역 */}
-                  <div style={{
-                    position: "absolute",
-                    top: "-10px",
-                    left: "-5px",
-                    right: "-5px",
-                    height: `${height + 20}px`,
-                    zIndex: 4
-                  }}></div>
-                  
-                  {/* 차트 바 */}
-                  <div style={{
-                    width: "28px",
-                    height: `${height}px`,
-                    background: "linear-gradient(to top, #1abc9c, #16a085)",
-                    borderRadius: "14px 14px 0 0",
-                    marginBottom: "8px",
-                    minHeight: "8px",
-                    position: "relative",
-                    transition: "all 0.3s ease",
-                    boxShadow: "0 4px 12px rgba(26, 188, 156, 0.3)"
-                  }}></div>
-                  
-                  {/* 데이터 포인트 */}
-                  <div style={{
-                    width: "8px",
-                    height: "8px",
-                    background: "#1abc9c",
-                    borderRadius: "50%",
-                    position: "absolute",
-                    top: `${150 - height + 4}px`,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    boxShadow: "0 2px 6px rgba(26, 188, 156, 0.4)"
-                  }}></div>
-                  
-                  <span style={{ 
-                    fontSize: "0.7rem", 
-                    color: "#6b7280",
-                    fontWeight: "600",
-                    textAlign: "center",
-                    background: "rgba(255, 255, 255, 0.9)",
-                    padding: "2px 4px",
-                    borderRadius: "3px",
-                    marginBottom: "2px"
-                  }}>
-                    {day.date}
-                  </span>
-                  <span style={{ 
-                    fontSize: "0.7rem", 
-                    color: "#6b7280",
-                    fontWeight: "500"
-                  }}>
-                    {day.saved_g}g
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          
-          {/* X축 제목 */}
-          <div style={{
-            textAlign: "center",
-            paddingTop: "1rem",
-            fontSize: "0.9rem",
-            color: "#4a5568",
-            fontWeight: "700"
-          }}>
-            날짜
-          </div>
-
-          {/* 차트 하단 정보 */}
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            paddingTop: "1rem",
-            borderTop: "1px solid rgba(26, 188, 156, 0.1)"
-          }}>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px"
-            }}>
-              <div style={{
-                width: "12px",
-                height: "12px",
-                background: "linear-gradient(135deg, #1abc9c, #16a085)",
-                borderRadius: "2px"
-              }}></div>
-              <span style={{ 
-                fontSize: "0.9rem", 
-                color: "#4b5563",
-                fontWeight: "500"
-              }}>
-                일일 절감량
-              </span>
-            </div>
-            <span style={{ 
-              fontSize: "0.9rem", 
-              color: "#1abc9c",
-              fontWeight: "700"
-            }}>
-              평균: {data?.last7days ? Math.round(data.last7days.reduce((sum, day) => sum + day.saved_g, 0) / data.last7days.length) : 0}g
-            </span>
-          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data?.last7days}
+              margin={{
+                top: 5,
+                right: 30,
+                left: 20,
+                bottom: 5,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e0e0" />
+              <XAxis dataKey="date" axisLine={false} tickLine={false} style={{ fontSize: '0.8rem', fill: '#6b7280' }} />
+              <YAxis
+                label={{ value: '탄소 절감량 (g)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: '0.9rem', fill: '#4a5568' } }}
+                axisLine={false}
+                tickLine={false}
+                style={{ fontSize: '0.8rem', fill: '#6b7280' }}
+              />
+              <Tooltip
+                cursor={{ fill: 'rgba(26, 188, 156, 0.1)' }}
+                contentStyle={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                  border: '1px solid #1abc9c',
+                  borderRadius: '8px',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                  fontSize: '0.9rem',
+                  color: '#333'
+                }}
+                labelStyle={{ color: '#1abc9c', fontWeight: 'bold' }}
+                formatter={(value: number) => [`${value}g`, '절감량']}
+              />
+              <Bar dataKey="saved_g" fill="#1abc9c" radius={[10, 10, 0, 0]} barSize={20} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div style={{ textAlign: "right", marginTop: "1rem" }}>
+          <button
+            onClick={() => handleDownloadChartData(data?.last7days || [])}
+            style={{
+              background: "#1abc9c",
+              color: "white",
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: "15px",
+              fontSize: "0.9rem",
+              fontWeight: "600",
+              cursor: "pointer",
+              boxShadow: "0 4px 10px rgba(26, 188, 156, 0.2)",
+              transition: "all 0.3s ease",
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = "#16a085";
+              e.currentTarget.style.boxShadow = "0 6px 15px rgba(26, 188, 156, 0.3)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = "#1abc9c";
+              e.currentTarget.style.boxShadow = "0 4px 10px rgba(26, 188, 156, 0.2)";
+            }}
+          >
+            차트 데이터 다운로드 (CSV)
+          </button>
         </div>
       </div>
 

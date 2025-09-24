@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { useCredits } from '../contexts/CreditsContext'; // Add this line
 import { useAuth } from '../contexts/AuthContext'; // Add this line
 import { getAuthHeaders } from '../contexts/CreditsContext'; // Add this line
 import "./Chat.css";
@@ -10,6 +9,11 @@ import "./Chat.css";
 interface Message {
   sender: "user" | "bot";
   text: string;
+  suggestion?: {
+    type: "challenge";
+    challenge_id: number;
+    title: string;
+  };
 }
 
 // 대시보드 데이터 인터페이스 정의
@@ -22,6 +26,8 @@ interface DashboardData {
   challenge_progress: number;
 }
 
+
+
 const Chat: React.FC = () => {
   const location = useLocation();
   const isPreview = new URLSearchParams(location.search).get("preview") === "1";
@@ -32,16 +38,40 @@ const Chat: React.FC = () => {
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null); // SpeechRecognition 인스턴스 참조
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null); // Timer for silence detection
+  const [pointRules, setPointRules] = useState<any[]>([]); // New state for point rules
 
-  const { creditsData } = useCredits(); // Get creditsData from context
+  const [isTtsEnabled, setIsTtsEnabled] = useState(true); // TTS 상태
+
+  // TTS 함수
+  const speakMessage = (text: string) => {
+    if (!isTtsEnabled || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel(); // 이전 음성 취소
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ko-KR';
+    utterance.rate = 1.0;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // 메시지 목록이 변경될 때마다 마지막 메시지를 읽어주고 스크롤
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.sender === 'bot') {
+      speakMessage(lastMessage.text);
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000"; // Moved API_URL declaration here
+
+  // const { creditsData } = useCredits(); // Get creditsData from context - unused
   const { user } = useAuth(); // Get user from context
   const currentUserId = user?.id; // Get current user ID
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  const userInfo = {
+    name: user?.name || "김에코", // 실제 로그인 사용자명으로 교체
+  };
 
-  // 음성 인식 핸들러
+  // 음성 인식 핸들러 (단일 선언)
   const handleVoiceInput = () => {
     if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
       alert("죄송합니다. 이 브라우저는 음성 인식을 지원하지 않습니다. Chrome 브라우저를 사용해 주세요.");
@@ -56,7 +86,6 @@ const Chat: React.FC = () => {
 
     recognition.onstart = () => {
       setIsListening(true);
-      setStatusMessage("말씀해주세요...");
       // Clear any previous timeout
       if (timeoutIdRef.current) {
         clearTimeout(timeoutIdRef.current);
@@ -90,7 +119,6 @@ const Chat: React.FC = () => {
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error("음성 인식 오류:", event.error);
       setIsListening(false);
-      setStatusMessage(`음성 인식 오류: ${event.error}`);
       if (timeoutIdRef.current) {
         clearTimeout(timeoutIdRef.current);
         timeoutIdRef.current = null;
@@ -99,7 +127,6 @@ const Chat: React.FC = () => {
 
     recognition.onend = () => {
       setIsListening(false);
-      setStatusMessage("");
       if (timeoutIdRef.current) {
         clearTimeout(timeoutIdRef.current);
         timeoutIdRef.current = null;
@@ -118,17 +145,6 @@ const Chat: React.FC = () => {
     }
   };
 
-  // 상태 메시지 (음성 인식용)
-  const [statusMessage, setStatusMessage] = useState<string>("");
-
-  const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
-  // const userId = 1; // 예시 사용자 ID - currentUserId로 대체
-
-  const userInfo = {
-    name: user?.name || "김에코", // 실제 로그인 사용자명으로 교체
-  };
-
-  // ✅ 실제 데이터 기반 응답 핸들러
   const handleDashboardReply = async (
     intent: "절약량" | "포인트" | "정원" | "챌린지"
   ) => {
@@ -162,14 +178,34 @@ const Chat: React.FC = () => {
       let botText = "";
 
       if (intent === "절약량") {
-        botText = `오늘은 ${actualData.co2_saved_today} g CO₂ 절약했고, 누적 절약량은 ${actualData.total_carbon_reduced} kg이에요 🌱\n\n💡 탄소 절감 팁:\n• 대중교통 이용하기\n• 자전거 타기\n• 에너지 절약하기\n• 친환경 제품 사용하기`;
+        botText = `오늘은 ${actualData.co2_saved_today} g CO₂ 절약했고, 누적 절약량은 ${actualData.total_carbon_reduced} kg이에요 🌱
+
+💡 탄소 절감 팁:
+• 대중교통 이용하기
+• 자전거 타기
+• 에너지 절약하기
+• 친환경 제품 사용하기`;
       } else if (intent === "포인트") {
-        botText = `지금까지 총 ${actualData.total_credits} 포인트를 모았어요 💰\n\n🎯 포인트 적립 방법:\n• 지하철 이용: +150P\n• 자전거 이용: +80P\n• 친환경 활동: +100P\n• 에너지 절약: +50P`;
+        const rulesText = pointRules.map(rule => `• ${rule.description}`).join('\n');
+        botText = `지금까지 총 ${actualData.total_credits || 0} 포인트를 모았어요 💰\n\n🎯 포인트 적립 방법:\n${rulesText}`;
       } else if (intent === "정원") {
-        botText = `현재 정원 레벨은 Lv.${actualData.garden_level} 입니다 🌳\n\n🌱 정원 관리 팁:\n• 매일 물주기로 포인트 적립\n• 10번 물주기마다 레벨업\n• 다양한 식물로 정원 꾸미기\n• 친구들과 정원 공유하기`;
+        botText = `현재 정원 레벨은 Lv.${actualData.garden_level} 입니다 🌳
+
+🌱 정원 관리 팁:
+• 매일 물주기로 포인트 적립
+• 10번 물주기마다 레벨업
+• 다양한 식물로 정원 꾸미기
+• 친구들과 정원 공유하기`;
       } else if (intent === "챌린지") {
         const percent = Math.round((actualData.challenge_progress / actualData.challenge_goal) * 100);
-        botText = `🔥 현재 챌린지 진행 상황: 목표 ${actualData.challenge_goal} kg 중 ${actualData.challenge_progress} kg 달성 (${percent}%)\n\n🎉 목표까지 ${(actualData.challenge_goal - actualData.challenge_progress).toFixed(1)} kg 남았어요!\n\n💪 챌린지 완주를 위한 활동:\n• 대중교통 이용하기\n• 자전거 타기\n• 도보로 이동하기`;
+        botText = `🔥 현재 챌린지 진행 상황: 목표 ${actualData.challenge_goal} kg 중 ${actualData.challenge_progress} kg 달성 (${percent}%)
+
+🎉 목표까지 ${(actualData.challenge_goal - actualData.challenge_progress).toFixed(1)} kg 남았어요!
+
+💪 챌린지 완주를 위한 활동:
+• 대중교통 이용하기
+• 자전거 타기
+• 도보로 이동하기`;
       }
 
       const botMessage: Message = { sender: "bot", text: botText };
@@ -207,7 +243,12 @@ const Chat: React.FC = () => {
       }
 
       const data = await response.json();
-      setMessages((prev) => [...prev, { sender: "bot", text: data.response }]);
+      const botMessage: Message = { 
+        sender: "bot", 
+        text: data.response,
+        suggestion: data.suggestion
+      };
+      setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
       console.error("Failed to send chat message:", error);
       setMessages((prev) => [...prev, { sender: "bot", text: "메시지 전송에 실패했어요. 다시 시도해주세요." }]);
@@ -216,28 +257,72 @@ const Chat: React.FC = () => {
     }
   };
 
+  const handleJoinChallenge = async (challengeId: number) => {
+    try {
+      const response = await fetch(`${API_URL}/api/challenges/${challengeId}/join`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || '챌린지 참여 실패');
+      }
+      
+      // Hide the suggestion buttons after joining
+      setMessages(prevMessages => prevMessages.map(msg => {
+        if (msg.suggestion?.challenge_id === challengeId) {
+          const { suggestion, ...rest } = msg;
+          return rest;
+        }
+        return msg;
+      }));
+
+      // Add a confirmation message
+      const confirmationMessage: Message = { sender: "bot", text: "챌린지에 참여했습니다! '챌린지 & 업적' 탭에서 확인해보세요." };
+      setMessages((prev) => [...prev, confirmationMessage]);
+
+    } catch (error) {
+      console.error('챌린지 참여 오류:', error);
+      const errorMessage: Message = { sender: "bot", text: `챌린지 참여에 실패했습니다: ${(error as Error).message}` };
+      setMessages((prev) => [...prev, errorMessage]);
+    }
+  };
+
+  const handleDenyChallenge = (messageToUpdate: Message) => {
+    // Just remove the suggestion from the message to hide the buttons
+    setMessages(prevMessages => prevMessages.map(msg => {
+      if (msg === messageToUpdate) {
+        const { suggestion, ...rest } = msg;
+        return rest;
+      }
+      return msg;
+    }));
+    // Optionally, add a follow-up message
+    const followupMessage: Message = { sender: "bot", text: "알겠습니다. 다른 도움이 필요하시면 언제든지 말씀해주세요." };
+    setMessages((prev) => [...prev, followupMessage]);
+  };
+
   // ✅ 추천 질문 버튼 클릭
   const handleQuickSend = async (text: string) => { // Make it async
     const userMessage: Message = { sender: "user", text };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true); // Set loading state
 
-    if (text === "AI 챌린지 추천해줘") { // Specific check for AI challenge
-      await sendChatMessage(text); // Send to chatbot endpoint
-    } else if (text.includes("챌린지")) {
-      await handleDashboardReply("챌린지");
-    } else if (text.includes("탄소") || text.includes("절약")) {
+    if (text === "AI 챌린지 추천해줘" || text === "탄소 절감 팁 알려줘" || text === "목표 달성 전략 알려줘") {
+      await sendChatMessage(text); // Send to chatbot endpoint for AI routing
+    } else if (text.includes("탄소량") || text.includes("절약한 탄소")) {
       await handleDashboardReply("절약량");
     } else if (text.includes("포인트")) {
       await handleDashboardReply("포인트");
     } else if (text.includes("정원")) {
       await handleDashboardReply("정원");
+    } else if (text.includes("챌린지 진행 상황")) {
+      await handleDashboardReply("챌린지");
     } else {
-      setMessages((prev) => [
-        ...prev,
-        { sender: "bot", text: "챗봇이 아직 학습 중이에요 🤖" },
-      ]);
-      setIsLoading(false); // Reset loading state if no specific action
+      // For other general questions, still send to chatbot for general search/knowledge base
+      await sendChatMessage(text);
     }
   };
 
@@ -247,8 +332,9 @@ const Chat: React.FC = () => {
     "내가 모은 포인트는?",
     "내 정원 레벨은?",
     "챌린지 진행 상황 알려줘",
-    "AI 챌린지 추천해줘", // AI 챌린지 추천 질문 추가
-    "탄소 절감 방법 알려줘",
+    "AI 챌린지 추천해줘",
+    "탄소 절감 팁 알려줘", // New: 탄소 절감 팁
+    "목표 달성 전략 알려줘", // New: 목표 달성 전략
     "포인트 적립 방법은?",
     "정원 관리 팁 주세요",
     "환경 친화적인 생활 방법은?",
@@ -329,7 +415,10 @@ const Chat: React.FC = () => {
             <p>환경 친화적인 생활을 위한 AI 어시스턴트</p>
           </div>
         </div>
-        <div className="chat-status">
+        <div className="chat-status" style={{ display: 'flex', alignItems: 'center' }}>
+          <button onClick={() => setIsTtsEnabled(!isTtsEnabled)} title={isTtsEnabled ? "음성 끄기" : "음성 켜기"} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', marginRight: '10px' }}>
+            {isTtsEnabled ? '🔊' : '🔇'}
+          </button>
           <div className="status-dot"></div>
           <span>온라인</span>
         </div>
@@ -360,6 +449,16 @@ const Chat: React.FC = () => {
                 <div className="message-bubble">
                   <p style={{ whiteSpace: 'pre-line' }}>{msg.text}</p>
                 </div>
+                {msg.suggestion && msg.suggestion.type === 'challenge' && (
+                  <div className="suggestion-buttons" style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
+                    <button onClick={() => handleJoinChallenge(msg.suggestion!.challenge_id)} className="suggestion-btn-yes">
+                      네, 참여할래요
+                    </button>
+                    <button onClick={() => handleDenyChallenge(msg)} className="suggestion-btn-no">
+                      아니요, 괜찮아요
+                    </button>
+                  </div>
+                )}
                 <div className="message-time">
                   {new Date().toLocaleTimeString('ko-KR', { 
                     hour: '2-digit', 
@@ -385,6 +484,7 @@ const Chat: React.FC = () => {
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {!isPreview && (

@@ -587,7 +587,7 @@ const ChallengeAchievements: React.FC = () => {
   const [newAchievement, setNewAchievement] = useState<AchievementData | null>(null);
   const [showAchievementModal, setShowAchievementModal] = useState(false);
 
-  const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('access_token');
@@ -819,71 +819,7 @@ const ChallengeAchievements: React.FC = () => {
     }));
   };
 
-  // 시뮬레이션: 챌린지 진행도 자동 업데이트
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setChallenges(prev => prev.map(challenge => {
-        if (challenge.isParticipating && !challenge.isCompleted && challenge.progress < 100) {
-          // 참여 중인 챌린지의 진행도를 랜덤하게 증가
-          const increment = Math.random() * 5; // 0-5% 증가
-          const newProgress = Math.min(challenge.progress + increment, 100);
-          
-          if (newProgress >= 100) {
-            // 완료 처리
-            const updatedChallenge = {
-              ...challenge,
-              progress: 100,
-              isCompleted: true
-            };
-            setCompletedChallenge(updatedChallenge);
-            setShowSuccessModal(true);
-            
-            // 완료 보상 지급
-            const rewardMatch = challenge.reward.match(/(\d+)C/);
-            if (rewardMatch) {
-              const rewardAmount = parseInt(rewardMatch[1]);
-              addCredits(rewardAmount, `${challenge.title} 완료 보상`);
-            }
-
-            // 업적 생성 및 추가
-            const newAchievement = createAchievementFromChallenge(updatedChallenge);
-            setAchievements(prev => {
-              // 이미 존재하는 업적인지 확인
-              const existingAchievement = prev.find(ach => ach.id === newAchievement.id);
-              if (existingAchievement) {
-                return prev; // 이미 존재하면 추가하지 않음
-              }
-              
-              // 새 업적 추가
-              const updatedAchievements = [...prev, newAchievement];
-              setNewAchievement(newAchievement);
-              setShowAchievementModal(true);
-              
-              // 2초 후 업적 탭으로 자동 전환
-              setTimeout(() => {
-                setActiveTab('achievements');
-                setShowAchievementModal(false);
-              }, 2000);
-              
-              return updatedAchievements;
-            });
-
-            // 3초 후 챌린지에서 완료된 항목 제거
-            setTimeout(() => {
-              setChallenges(prev => prev.filter(c => c.id !== challenge.id));
-            }, 3000);
-            
-            return updatedChallenge;
-          }
-          
-          return { ...challenge, progress: newProgress };
-        }
-        return challenge;
-      }));
-    }, 10000); // 10초마다 업데이트
-
-    return () => clearInterval(interval);
-  }, [addCredits]);
+  
 
   useEffect(() => {
     // 챌린지 데이터 로드
@@ -892,22 +828,34 @@ const ChallengeAchievements: React.FC = () => {
         if (res.ok) return res.json();
         throw new Error("API 실패");
       })
-      .then((data) => {
-        // Map backend's is_joined to frontend's isParticipating
+      .then(async (data) => {
         const mappedChallenges = data.map((c: any) => ({
           id: c.id,
           title: c.title,
           description: c.description,
           progress: c.progress,
           reward: c.reward,
-          isParticipating: c.is_joined, // Map is_joined to isParticipating
-          isCompleted: c.is_completed || false, // Assuming backend might send is_completed or default to false
-          startDate: c.start_at, // Assuming backend sends start_at
-          endDate: c.end_at // Assuming backend sends end_at
+          isParticipating: c.is_joined,
+          isCompleted: c.is_completed || false,
+          startDate: c.start_at,
+          endDate: c.end_at
         }));
-        setChallenges(mappedChallenges);
+
+        // Fetch real-time progress for participating challenges
+        const progressPromises = mappedChallenges.map((challenge: ChallengeData) => {
+          if (challenge.isParticipating && !challenge.isCompleted) {
+            return fetch(`${API_URL}/api/challenges/${challenge.id}/progress`, { headers: getAuthHeaders() })
+              .then(res => res.ok ? res.json() : Promise.resolve({ progress: challenge.progress }))
+              .then(progressData => ({ ...challenge, progress: progressData.progress }))
+              .catch(() => challenge); // On error, keep original challenge data
+          }
+          return Promise.resolve(challenge);
+        });
+
+        const challengesWithRealProgress = await Promise.all(progressPromises);
+        setChallenges(challengesWithRealProgress);
       })
-      .catch((error) => { // Catch the error object
+      .catch((error) => {
         console.error("챌린지 데이터 로드 실패:", error);
         setChallenges(dummyChallenges);
       });
@@ -988,7 +936,7 @@ const ChallengeAchievements: React.FC = () => {
                   <div className="progress-bar">
                     <div
                       className="progress-fill"
-                      style={{ width: `${challenge.progress}%` }}
+                      style={{ width: `${Math.min(challenge.progress, 100)}%` }}
                     />
                   </div>
                   <p className="progress-text">
@@ -1010,22 +958,25 @@ const ChallengeAchievements: React.FC = () => {
                 )}
 
                 <div className="challenge-actions">
-                  <button 
-                    className={`join-btn ${challenge.isParticipating ? 'participating' : ''} ${challenge.isCompleted ? 'completed' : ''}`}
-                    onClick={() => handleJoinChallenge(challenge.id)}
-                    disabled={challenge.isParticipating || challenge.isCompleted}
-                  >
-                    {challenge.isCompleted ? '완료됨' : 
-                     challenge.isParticipating ? '참여 중...' : '참여하기'}
-                  </button>
-                  
-                  {challenge.isParticipating && !challenge.isCompleted && (
+                  {challenge.progress < 100 && !challenge.isCompleted && (
                     <button 
-                      className="progress-btn"
-                      onClick={() => updateChallengeProgress(challenge.id, challenge.progress + 10)}
+                      className={`join-btn ${challenge.isParticipating ? 'participating' : ''}`}
+                      onClick={() => handleJoinChallenge(challenge.id)}
+                      disabled={challenge.isParticipating}
                     >
-                      +10% 진행
+                      {challenge.isParticipating ? '참여 중...' : '참여하기'}
                     </button>
+                  )}
+                  {challenge.progress >= 100 && !challenge.isCompleted && (
+                    <button 
+                      className="join-btn completed" 
+                      onClick={() => updateChallengeProgress(challenge.id, challenge.progress)}
+                    >
+                      완료!
+                    </button>
+                  )}
+                  {challenge.isCompleted && (
+                     <button className="join-btn completed" disabled>완료됨</button>
                   )}
                 </div>
               </div>

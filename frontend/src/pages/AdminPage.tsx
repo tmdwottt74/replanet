@@ -51,7 +51,7 @@ const AdminPage: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/admin/users`);
+      const response = await fetch(`${API_URL}/admin/users`);
       if (!response.ok) {
         throw new Error('Failed to fetch users');
       }
@@ -77,7 +77,7 @@ const AdminPage: React.FC = () => {
       return;
     }
     try {
-      const response = await fetch(`${API_URL}/api/admin/users/${userId}`, {
+      const response = await fetch(`${API_URL}/admin/users/${userId}`, {
         method: 'DELETE',
       });
       if (!response.ok) {
@@ -102,7 +102,7 @@ const AdminPage: React.FC = () => {
   const handleSubmitGrantPoints = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_URL}/api/admin/grant-points`, {
+      const response = await fetch(`${API_URL}/admin/grant-points`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(grantPointsForm),
@@ -129,7 +129,7 @@ const AdminPage: React.FC = () => {
   const handleSubmitAddMobilityLog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_URL}/api/admin/add-mobility-log`, {
+      const response = await fetch(`${API_URL}/admin/add-mobility-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mobilityLogForm),

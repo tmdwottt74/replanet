@@ -58,27 +58,7 @@ const Signup: React.FC = () => {
     }
   };
 
-  const handleSocialSignup = async (provider: string) => {
-    setIsLoading(true);
-    
-    try {
-      // 소셜 회원가입 시뮬레이션 (실제 기능 없음)
-      const demoUser = {
-        id: Date.now().toString(),
-        name: provider === 'google' ? '구글 사용자' : '카카오 사용자',
-        email: `${provider}@example.com`,
-        role: '사용자'
-      };
-      
-      localStorage.setItem('eco-user', JSON.stringify(demoUser));
-      alert(`${provider} 회원가입이 완료되었습니다!`);
-      navigate('/');
-    } catch (error) {
-      alert(`${provider} 회원가입 중 오류가 발생했습니다.`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  
 
   return (
     <div className="auth-container">
@@ -206,7 +186,7 @@ const Signup: React.FC = () => {
               />
               <span className="checkmark"></span>
               <span className="checkbox-text">
-                <Link to="/terms" className="terms-link">이용약관</Link>에 동의합니다 (필수)
+                이용약관에 동의합니다 (필수)
               </span>
             </label>
           </div>
@@ -246,30 +226,7 @@ const Signup: React.FC = () => {
             {isLoading ? '회원가입 중...' : '회원가입'}
           </button>
 
-          <div className="divider">
-            <span>또는</span>
-          </div>
-
-          <div className="social-login">
-            <button 
-              type="button" 
-              className="social-btn google"
-              onClick={() => handleSocialSignup('google')}
-              disabled={isLoading}
-            >
-              <span className="social-icon">🔍</span>
-              Google로 회원가입
-            </button>
-            <button 
-              type="button" 
-              className="social-btn kakao"
-              onClick={() => handleSocialSignup('kakao')}
-              disabled={isLoading}
-            >
-              <span className="social-icon">💬</span>
-              Kakao로 회원가입
-            </button>
-          </div>
+          
 
           <div className="auth-footer">
             <p>

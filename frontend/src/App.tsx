@@ -29,6 +29,12 @@ import CreditRecent from './pages/CreditRecent'; // New
 import Register from './pages/Register'; // New
 import ServicePage from './ServicePage'; // New
 import MobilityTrackingPage from './pages/MobilityTrackingPage'; // New Mobility Tracking Page
+import CarbonFootprintPage from './pages/CarbonFootprintPage'; // New Carbon Footprint Page
+import GroupList from "./pages/Groups/GroupList";
+import GroupDashboard from "./pages/Groups/GroupDashboard";
+import CreateGroupChallenge from "./pages/Groups/CreateGroupChallenge";
+import GroupRankingPage from "./pages/Groups/GroupRankingPage"; // Added this line
+import { GroupProvider } from "./contexts/GroupContext";
 
 
 // 로고 컴포넌트
@@ -354,7 +360,13 @@ function AppContent() {
           <Route path="/credit-recent" element={<CreditRecent />} />
           <Route path="/register" element={<Register />} />
           <Route path="/service" element={<ServicePage />} />
-          <Route path="/mobility-tracking" element={<MobilityTrackingPage />} /> {/* New Mobility Tracking Route */}
+          <Route path="/mobility-tracking" element={<MobilityTrackingPage />} />
+          <Route path="/carbon-footprint" element={<CarbonFootprintPage />} />
+          
+          <Route path="/groups" element={<GroupList />} />
+          <Route path="/groups/ranking" element={<GroupRankingPage />} />
+          <Route path="/groups/:groupId/create-challenge" element={<CreateGroupChallenge />} />
+          <Route path="/groups/:groupId" element={<GroupDashboard />} />
         </Routes>
       </main>
 
@@ -379,7 +391,9 @@ function App() {
       <UserProvider>
         <CreditsProvider>
           <GardenProvider>
-            <AppContent />
+            <GroupProvider>
+              <AppContent />
+            </GroupProvider>
           </GardenProvider>
         </CreditsProvider>
       </UserProvider>

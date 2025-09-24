@@ -110,7 +110,8 @@ const MyGarden: React.FC = () => {
     return (
       <div className="garden-card">
         <div style={{ textAlign: 'center', padding: '3rem' }}>
-          <div className="spinner">불러오는 중...</div>
+          <div className="spinner"></div>
+          <div>불러오는 중...</div>
         </div>
       </div>
     );

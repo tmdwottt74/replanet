@@ -1,4 +1,4 @@
-#!C:\Users\coron\OneDrive\바탕 화면\2025.2-2\seoul25_AI_ht\gitHub\ecoooo\backend\venv\Scripts\python.exe
+#!C:\Users\coron\OneDrive\바탕 화면\2025.2-2\seoul25_AI_ht\gitHub\replanet\backend\venv\Scripts\python.exe
 
 import sys
 import json

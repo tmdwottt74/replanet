@@ -22,6 +22,7 @@ const Sidebar: React.FC = () => {
         { path: "/dashboard", label: "대시보드", icon: "📊" },
         { path: "/credit", label: "Credit", icon: "💰" },
         { path: "/mobility-tracking", label: "이동 기록 측정", icon: "🚶" }, // New mobility tracking link
+        { path: "/groups", label: "그룹", icon: "👥" },
       ]
     },
     {
