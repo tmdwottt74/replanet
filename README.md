@@ -117,3 +117,5 @@ uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 cd frontend
 npm install
 npm start
+
+jj
